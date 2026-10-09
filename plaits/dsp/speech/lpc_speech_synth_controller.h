@@ -159,6 +159,14 @@ class LPCSpeechSynthController {
   ~LPCSpeechSynthController() { }
   
   void Init(LPCSpeechSynthWordBank* word_bank);
+
+  // Used in duo mode, where two controllers share the same word bank: when
+  // one of them loads a new bank, the other one must forget about the
+  // frames of the previous one, as Render() does when it loads a bank.
+  inline void ResetPlayback() {
+    playback_frame_ = -1;
+    last_playback_frame_ = -1;
+  }
   
   void Render(
       bool free_running,

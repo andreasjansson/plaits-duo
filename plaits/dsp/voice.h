@@ -127,6 +127,10 @@ struct Patch {
   int engine;
   float decay;
   float lpg_colour;
+  
+  // Duo mode.
+  bool duo_mode;
+  int duo_engine;
 };
 
 struct Modulations {
@@ -144,6 +148,9 @@ struct Modulations {
   bool morph_patched;
   bool trigger_patched;
   bool level_patched;
+  
+  // LEVEL input converted to semitones, used as a pitch CV in duo mode.
+  float level_note;
 };
 
 class Voice {
@@ -163,6 +170,11 @@ class Voice {
       Frame* frames,
       size_t size);
   inline int active_engine() const { return previous_engine_index_; }
+  
+  // Forces the active engine to be reset on the next call to Render() -
+  // required when coming back from duo mode, since all engines share the
+  // same RAM.
+  inline void ResetEngine() { previous_engine_index_ = -1; }
     
  private:
   void ComputeDecayParameters(const Patch& settings);

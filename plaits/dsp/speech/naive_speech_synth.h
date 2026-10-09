@@ -77,6 +77,9 @@ class NaiveSpeechSynth {
 
   static Phoneme phonemes_[kNaiveSpeechNumPhonemes][kNaiveSpeechNumRegisters];
   
+  // The duo mode version of this synth shares the phoneme table.
+  friend class NaiveSpeechFormants;
+  
   DISALLOW_COPY_AND_ASSIGN(NaiveSpeechSynth);
 };
   
