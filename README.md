@@ -104,7 +104,7 @@ its memory and CPU use, and its update file.
 
 ## Resources
 
-The firmware has 528 bytes of flash memory left (of 224kB). The RAM leaves
+The firmware has 576 bytes of flash memory left (of 224kB). The RAM leaves
 4.9kB for the stack, of which the benchmarks use at most 1.9kB.
 
 CPU use, measured on an emulated Cortex-M4 with the timing of the module's
@@ -115,14 +115,14 @@ its own source: the modal resonator, 15268 cycles):
 
 | model | 1 voice, stereo | 1 voice, split | 2 voices, stereo | 2 voices, split |
 | --- | --- | --- | --- | --- |
-| classic waveforms | 50% | 47% | 87% | 71% |
-| waveshaper | 46% | 56% | 79% | 90% |
-| 2-operator FM | 59% | 48% | 89% | 73% |
-| formant | 51% | 44% | 78% | 66% |
+| classic waveforms | 50% | 47% | 87% | 72% |
+| waveshaper | 45% | 56% | 78% | 89% |
+| 2-operator FM | 58% | 48% | 88% | 73% |
+| formant | 51% | 44% | 77% | 66% |
 | harmonic | 58% | 61% | 90% | 88% |
-| wavetable | 66% | 56% | 92% | 78% |
+| wavetable | 65% | 56% | 91% | 77% |
 | string | 96% | 89% | 96% | 89% |
-| vowel | 67% | 63% | 87% | 90% |
+| vowel | 65% | 62% | 86% | 89% |
 
 To make room for duo mode in the flash memory, the code is built with less
 loop unrolling (see `plaits/makefile`). The models of the original firmware

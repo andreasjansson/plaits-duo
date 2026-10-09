@@ -50,11 +50,15 @@
 //   right channel at 4ms - modulation. The bass is kept out of the effect.
 //
 // The three effects share the same memory, since only one model runs at a
-// time. The allpass sections of the diffuser store their delay lines as
-// 16-bit samples, at half scale (as floats, they would need twice as much
-// memory). The delays of the diffuser move so slowly that they are constant
-// through each block; the delays of the chorus and of the ensemble move
-// linearly through each block.
+// time: the delay line of the chorus or of the ensemble, or the first
+// allpass section of each chain of the diffuser. The second sections are in
+// the RAM shared by the engines, after the memory of the engines which use
+// the diffuser (see DuoVoice::Init). All the delay lines are stored as
+// floats: inside the allpass sections, the signal goes well above full scale
+// (up to 3 times, with the two voices of the FM model), and 16-bit samples
+// would clip. The delays of the diffuser move so slowly that they are
+// constant through each block; the delays of the chorus and of the ensemble
+// move linearly through each block.
 
 #ifndef PLAITS_DSP_DUO_DUO_STEREO_H_
 #define PLAITS_DSP_DUO_DUO_STEREO_H_
@@ -122,28 +126,35 @@ class DuoDelay {
 // The delay line of an allpass section, read and written one sample at a
 // time.
 struct DuoAllpassLine {
-  int16_t* begin;
-  int16_t* end;
-  int16_t* write;
+  float* begin;
+  float* end;
+  float* write;
 
-  void Init(int16_t* memory, size_t length);
+  void Init(float* memory, size_t length);
 
   // The sample written delay samples before the next one.
-  inline int16_t* tap(int delay) const {
-    int16_t* p = write - delay;
+  inline float* tap(int delay) const {
+    float* p = write - delay;
     return p < begin ? p + (end - begin) : p;
   }
 };
 
-// Memory of the effects, in floats.
-const size_t kDuoStereoMemorySize = 352;
+// Memory of the effects, in floats (the delay line of the ensemble needs the
+// most).
+const size_t kDuoStereoMemorySize = 326;
+
+// Memory of the second allpass section of each chain of the diffuser, in
+// floats.
+const size_t kDuoDiffuserMemorySize = 381;
 
 class DuoStereo {
  public:
   DuoStereo() { }
   ~DuoStereo() { }
 
-  void Init();
+  // diffuser_memory: kDuoDiffuserMemorySize floats (without it, the diffuser
+  // is not used).
+  void Init(float* diffuser_memory);
 
   // Selects the effect, and clears its memory (and that of the limiter).
   void set_effect(DuoStereoEffect effect);
@@ -172,10 +183,8 @@ class DuoStereo {
       size_t size);
 
   DuoStereoEffect effect_;
-  union {
-    int16_t allpass[2 * kDuoStereoMemorySize];
-    float delay[kDuoStereoMemorySize];
-  } memory_;
+  float memory_[kDuoStereoMemorySize];
+  float* diffuser_memory_;
   DuoAllpassLine allpass_[4];
   DuoDelay delay_;
 

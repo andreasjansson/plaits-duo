@@ -87,15 +87,24 @@ void DuoVoice::Init(BufferAllocator* allocator) {
   engines_[6] = &string_engine_;
   engines_[7] = &speech_engine_;
 
+  // All engines share the same RAM space - also with the engines of the
+  // original voice. The diffuser, which runs along with an engine, has part
+  // of its memory after that of the engines which use it.
+  size_t diffuser_offset = 0;
   for (int i = 0; i < kNumDuoEngines; ++i) {
     const DuoEngineSettings& s = kDuoEngineSettings[i];
     engines_[i]->set_post_processing_settings(
         s.already_enveloped, s.split_gain, s.stereo_gain, s.layout, s.effect);
-    // All engines share the same RAM space - also with the engines of the
-    // original voice.
     allocator->Free();
+    const size_t free = allocator->free();
     engines_[i]->Init(allocator);
+    if (s.effect == DUO_STEREO_EFFECT_DIFFUSER) {
+      diffuser_offset = max(diffuser_offset, free - allocator->free());
+    }
   }
+  allocator->Free();
+  allocator->Allocate<float>(
+      (diffuser_offset + sizeof(float) - 1) / sizeof(float));
 
   engine_quantizer_.Init();
   previous_engine_index_ = -1;
@@ -104,7 +113,7 @@ void DuoVoice::Init(BufferAllocator* allocator) {
 
   out_post_processor_.Init();
   aux_post_processor_.Init();
-  stereo_.Init();
+  stereo_.Init(allocator->Allocate<float>(kDuoDiffuserMemorySize));
 
   decay_envelope_.Init();
   lpg_envelope_.Init();

@@ -31,6 +31,8 @@
 # - plaits-analyze: measurements on the audio files written by the simulator.
 # - plaits-update-decoder: decodes a firmware update file with the code of the
 #   audio bootloader (see plaits/test/update_decoder.cc).
+# - plaits-stereo-linearity: checks that nothing clips inside the stereo
+#   effects of duo mode (see plaits/test/stereo_linearity.cc).
 #
 # make -f plaits/test/host.mk
 
@@ -52,7 +54,8 @@ HEADERS = $(wildcard plaits/*.h plaits/dsp/*.h plaits/dsp/*/*.h \
 	plaits/test/sim/*.h plaits/test/sim/*/*/*.h)
 
 all: $(BUILD_DIR)plaits-sim $(BUILD_DIR)plaits-sim-v1.1 \
-	$(BUILD_DIR)plaits-analyze $(BUILD_DIR)plaits-update-decoder
+	$(BUILD_DIR)plaits-analyze $(BUILD_DIR)plaits-update-decoder \
+	$(BUILD_DIR)plaits-stereo-linearity
 
 $(BUILD_DIR)plaits-sim: $(SIM_SOURCES) plaits/ui.cc plaits/settings.cc \
 		$(DSP_SOURCES) $(HEADERS)
@@ -79,6 +82,11 @@ $(BUILD_DIR)plaits-sim-v1.1: $(UPSTREAM_DIR)plaits/ui.cc $(SIM_SOURCES) \
 $(BUILD_DIR)plaits-analyze: plaits/test/plaits_analyze.cc
 	mkdir -p $(BUILD_DIR)
 	$(CXX) -O2 -Wall -Werror -o $@ $<
+
+$(BUILD_DIR)plaits-stereo-linearity: plaits/test/stereo_linearity.cc \
+		plaits/dsp/duo/duo_stereo.cc plaits/resources.cc $(HEADERS)
+	mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -Werror -I. -o $@ $(filter %.cc,$^)
 
 $(BUILD_DIR)plaits-update-decoder: plaits/test/update_decoder.cc \
 		stm_audio_bootloader/qpsk/demodulator.cc \

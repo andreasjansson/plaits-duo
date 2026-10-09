@@ -86,41 +86,11 @@ inline size_t DelayLength(float max_delay) {
   return static_cast<size_t>(max_delay) + 2;
 }
 
-// The delay lines are stored as 16-bit fixed-point numbers, with 14
-// fractional bits (half scale, to leave some headroom).
-#ifdef TEST
-inline int16_t Compress(float x) {
-  return Clip16(static_cast<int32_t>(x * 16384.0f));
-}
-
-inline float Decompress(int16_t x) {
-  return static_cast<float>(x) * (1.0f / 16384.0f);
-}
-#else
-// The same, with the fixed-point conversions of the FPU (the conversion to
-// 16 bits saturates).
-inline int16_t Compress(float x) {
-  int32_t result;
-  __asm (
-      "vcvt.s16.f32 %1, %1, #14\n\t"
-      "vmov %0, %1" : "=r" (result), "+t" (x));
-  return result;
-}
-
-inline float Decompress(int16_t x) {
-  float result;
-  __asm (
-      "vmov %0, %1\n\t"
-      "vcvt.f32.s32 %0, %0, #14" : "=t" (result) : "r" (int32_t(x)));
-  return result;
-}
-#endif  // TEST
-
-void DuoAllpassLine::Init(int16_t* memory, size_t length) {
+void DuoAllpassLine::Init(float* memory, size_t length) {
   begin = memory;
   end = memory + length;
   write = memory;
-  fill(begin, end, 0);
+  fill(begin, end, 0.0f);
 }
 
 void DuoDelay::Init(float* memory, size_t length) {
@@ -214,7 +184,8 @@ template void DuoDelay::Read<1>(
 template void DuoDelay::Read<3>(
     const float*, const float*, float*, size_t) const;
 
-void DuoStereo::Init() {
+void DuoStereo::Init(float* diffuser_memory) {
+  diffuser_memory_ = diffuser_memory;
   peak_ = 0.5f;
   set_effect(DUO_STEREO_EFFECT_NONE);
 }
@@ -242,26 +213,34 @@ void DuoStereo::set_effect(DuoStereoEffect effect) {
     }
   }
 
-  size_t size = 0;
+  // The delay lines (if their memory is too small, which does not happen with
+  // these settings, there is no effect).
   if (effect_ == DUO_STEREO_EFFECT_DIFFUSER) {
-    int16_t* memory = memory_.allpass;
+    // Left chain: sections 0 and 1, right chain: sections 2 and 3.
+    size_t length[4];
     for (int i = 0; i < 4; ++i) {
-      const size_t length = DelayLength(kDiffuserDelay[i] + kDiffuserDepth);
-      allpass_[i].Init(memory, length);
-      memory += length;
+      length[i] = DelayLength(kDiffuserDelay[i] + kDiffuserDepth);
     }
-    size = (memory - memory_.allpass + 1) / 2;
+    if (!diffuser_memory_ ||
+        length[0] + length[2] > kDuoStereoMemorySize ||
+        length[1] + length[3] > kDuoDiffuserMemorySize) {
+      effect_ = DUO_STEREO_EFFECT_NONE;
+      return;
+    }
+    allpass_[0].Init(memory_, length[0]);
+    allpass_[2].Init(memory_ + length[0], length[2]);
+    allpass_[1].Init(diffuser_memory_, length[1]);
+    allpass_[3].Init(diffuser_memory_ + length[1], length[3]);
   } else if (effect_ != DUO_STEREO_EFFECT_NONE) {
     const size_t length = effect_ == DUO_STEREO_EFFECT_CHORUS
         ? DelayLength(kChorusCenter + kChorusDepth)
         : DelayLength(
             kEnsembleCenter + kEnsembleSlowDepth + kEnsembleFastDepth);
-    delay_.Init(memory_.delay, length);
-    size = DuoDelay::memory_size(length);
-  }
-  if (size > kDuoStereoMemorySize) {
-    // Not enough memory (this does not happen with these settings).
-    effect_ = DUO_STEREO_EFFECT_NONE;
+    if (DuoDelay::memory_size(length) > kDuoStereoMemorySize) {
+      effect_ = DUO_STEREO_EFFECT_NONE;
+      return;
+    }
+    delay_.Init(memory_, length);
   }
 }
 
@@ -299,12 +278,12 @@ void DuoStereo::ProcessAllpassChain(
   const float fractional_b = delay_b - static_cast<float>(integral_b);
   const float complement_a = 1.0f - fractional_a;
   const float complement_b = 1.0f - fractional_b;
-  int16_t* read_a = a->tap(integral_a);
-  int16_t* read_b = b->tap(integral_b);
-  int16_t* write_a = a->write;
-  int16_t* write_b = b->write;
-  float previous_a = Decompress(*a->tap(integral_a + 1));
-  float previous_b = Decompress(*b->tap(integral_b + 1));
+  float* read_a = a->tap(integral_a);
+  float* read_b = b->tap(integral_b);
+  float* write_a = a->write;
+  float* write_b = b->write;
+  float previous_a = *a->tap(integral_a + 1);
+  float previous_b = *b->tap(integral_b + 1);
   while (size) {
     // Up to the end of a line.
     size_t n = min(size, static_cast<size_t>(a->end - read_a));
@@ -315,18 +294,18 @@ void DuoStereo::ProcessAllpassChain(
     while (n--) {
       const float x = *in++;
 
-      const float delayed_a = Decompress(*read_a++);
+      const float delayed_a = *read_a++;
       const float d_a = previous_a * fractional_a + delayed_a * complement_a;
       previous_a = delayed_a;
       const float w_a = x + g * d_a;
-      *write_a++ = Compress(w_a);
+      *write_a++ = w_a;
       const float y_a = d_a - g * w_a;
 
-      const float delayed_b = Decompress(*read_b++);
+      const float delayed_b = *read_b++;
       const float d_b = previous_b * fractional_b + delayed_b * complement_b;
       previous_b = delayed_b;
       const float w_b = y_a + g * d_b;
-      *write_b++ = Compress(w_b);
+      *write_b++ = w_b;
       *out++ = d_b - g * w_b;
     }
     if (read_a == a->end) {

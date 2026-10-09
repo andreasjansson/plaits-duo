@@ -254,3 +254,12 @@ where
 * p5 <= 0.8
 * p6 <= 0.8
 * p7 <= 0.8
+
+===
+nothing clips inside the stereo effects, even with the two voices at full scale (twice full scale together): their output is exactly proportional to their input (see plaits-stereo-linearity)
+===
+plaits-stereo-linearity
+---
+diffuser: largest difference 0 LSB
+chorus: largest difference 0 LSB
+ensemble: largest difference 0 LSB

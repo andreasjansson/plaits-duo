@@ -30,6 +30,10 @@ The test tools (see `plaits/test/host.mk`):
   image, differences between recordings).
 - `plaits-update-decoder`: decodes a firmware update file with the code of
   the audio bootloader.
+- `plaits-stereo-linearity`: checks that nothing clips inside the stereo
+  effects of duo mode: each effect processes two full-scale voices, then the
+  same signal at a quarter of the level, which must give exactly a quarter of
+  the output.
 
 `leds` prints the 8 LEDs from top to bottom: `G` (green), `R` (red), `Y`
 (both colors) or `.` (off). The scripts start by waiting for the knob
@@ -77,8 +81,9 @@ The original firmware is unchanged.
   (correlation below 0.9: 1 would be mono), and the bass stays in the middle
   (except for the classic waveforms, whose saws are detuned, and the
   harmonic model, whose fundamental is the same in both channels). No
-  model reaches full scale (the models with a limiter stay below 0.8). In
-  the split layout, the voices are not processed.
+  model reaches full scale (the models with a limiter stay below 0.8), and
+  nothing clips inside the stereo effects. In the split layout, the voices
+  are not processed.
 - `settings.txt`: the settings are compatible with the original firmware in
   both directions: after an update, the model and the calibrations are kept;
   after going back to the original firmware, it starts with the model it
