@@ -40,7 +40,7 @@ stereo image:
 | --- | --- | --- |
 | 1 | classic waveforms | one saw per channel, slightly detuned (the detuning drifts slowly), and the same square in both |
 | 2 | waveshaper | the wavefolder is offset in opposite directions in the two channels (by an amount which breathes slowly) |
-| 3 | 2-operator FM | moving diffuser: two different chains of allpass filters, whose delays move slowly (the bass stays in the middle), followed by a limiter |
+| 3 | 2-operator FM | moving diffuser: two different chains of allpass filters, whose delays move slowly (the bass stays in the middle); a few dB quieter than in the split layout, since the diffuser makes its peaks up to twice as high |
 | 4 | formant | moving diffuser |
 | 5 | harmonic | each harmonic has its own, slowly changing, phase difference between the channels (neighbouring harmonics turn in opposite directions; the fundamental is the same in both) |
 | 6 | wavetable | the chorus of the Juno-60 (mode I), followed by a limiter |
@@ -51,7 +51,8 @@ In every model, the two channels have the same level in every frequency
 band, and the image is centered on average. Nothing reaches full scale: the
 models whose peaks grow with their stereo processing (FM, wavetable), and
 the string and vowel models, go through a limiter, which turns the sound
-down as soon as a peak would go above 0.8. Some images move: with the
+down as soon as a peak would go above 0.8 (it rarely has to, except with
+the string model, as in the original firmware). Some images move: with the
 classic waveforms, the detuned saws make the image sway slowly from side to
 side, and the harmonic model does the same when one or two harmonics
 dominate the spectrum.

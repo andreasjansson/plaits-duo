@@ -50,17 +50,19 @@ struct DuoEngineSettings {
 
 // Split layout: same gains as the OUT signal of the original engines.
 // Stereo layout: each model has its own way of making a stereo signal
-// (chosen by ear), at the same loudness as in the split layout. The phase
-// changes made by the diffuser raise the peaks of FM sounds, and the chorus
-// those of the bass of the wavetable model: they go through a limiter, like
-// the string and speech models.
+// (chosen by ear), at the same loudness as in the split layout - except FM:
+// the phase changes made by the diffuser make its peaks up to twice as high,
+// and it is a few dB quieter, so that the limiter rarely has to turn it down
+// (a limiter which works all the time makes it sound clipped). The chorus
+// raises the peaks of the bass of the wavetable model. These models go
+// through a limiter, like the string and speech models.
 const DuoEngineSettings kDuoEngineSettings[kNumDuoEngines] = {
   // Classic waveforms: one saw per channel (see DuoVirtualAnalogEngine).
   { false, 0.8f, 0.8f, DUO_STEREO_NATIVE, DUO_STEREO_EFFECT_NONE },
   // Waveshaper: mirrored wavefolders (see DuoWaveshapingEngine).
   { false, 0.7f, 0.7f, DUO_STEREO_NATIVE, DUO_STEREO_EFFECT_NONE },
   // 2-operator FM.
-  { false, 0.6f, -0.75f, DUO_STEREO_VOICES, DUO_STEREO_EFFECT_DIFFUSER },
+  { false, 0.6f, -0.45f, DUO_STEREO_VOICES, DUO_STEREO_EFFECT_DIFFUSER },
   // Formant.
   { false, 0.7f, 0.7f, DUO_STEREO_VOICES, DUO_STEREO_EFFECT_DIFFUSER },
   // Harmonic: each harmonic has its own phase difference between the
