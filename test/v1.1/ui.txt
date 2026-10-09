@@ -1,0 +1,119 @@
+===
+the left button cycles through the green models, the right one through the red models
+===
+cat > script.txt <<'SCRIPT'
+wait 500ms
+leds
+tap left
+leds
+tap left
+leds
+tap right
+leds
+tap right
+leds
+tap left
+leds
+SCRIPT
+plaits-sim < script.txt > new.txt
+plaits-sim-v1.1 < script.txt > reference.txt
+diff new.txt reference.txt && cat new.txt
+---
+leds G.......
+leds .G......
+leds ..G.....
+leds ..R.....
+leds ...R....
+leds ...G....
+
+===
+holding the left button shows the low-pass gate color and decay, and TIMBRE and MORPH change them
+===
+cat > script.txt <<'SCRIPT'
+wait 500ms
+press left
+wait 2.1s
+leds
+knob timbre 0.9
+knob morph 0.1
+wait 200ms
+leds
+release left
+wait 100ms
+leds
+SCRIPT
+plaits-sim < script.txt > new.txt
+plaits-sim-v1.1 < script.txt > reference.txt
+diff new.txt reference.txt && cat new.txt
+---
+leds ......YY
+leds YYYY...Y
+leds G.......
+===
+holding the right button shows the octave range, and HARMONICS changes it
+===
+cat > script.txt <<'SCRIPT'
+wait 500ms
+press right
+wait 2.1s
+leds
+knob harmonics 0.35
+wait 200ms
+leds
+release right
+wait 100ms
+leds
+SCRIPT
+plaits-sim < script.txt > new.txt
+plaits-sim-v1.1 < script.txt > reference.txt
+diff new.txt reference.txt && cat new.txt
+---
+leds YYYYYYYY
+leds .....Y..
+leds G.......
+===
+holding both buttons enters the V/OCT calibration (1V, then 3V)
+===
+cat > script.txt <<'SCRIPT'
+wait 500ms
+press both
+wait 2.1s
+release both
+leds 500ms
+cv v_oct 1
+wait 200ms
+tap left
+leds 500ms
+cv v_oct 3
+wait 200ms
+tap left
+leds
+SCRIPT
+plaits-sim < script.txt > new.txt
+plaits-sim-v1.1 < script.txt > reference.txt
+diff new.txt reference.txt && cat new.txt
+---
+leds G.......
+leds Y.......
+leds G.......
+
+===
+holding the right button at power on switches the color blind mode (yellow instead of green)
+===
+cat > script.txt <<'SCRIPT'
+wait 500ms
+leds
+reboot_holding right
+wait 500ms
+leds
+reboot_holding right
+wait 500ms
+leds
+SCRIPT
+plaits-sim < script.txt > new.txt
+plaits-sim-v1.1 < script.txt > reference.txt
+diff new.txt reference.txt && cat new.txt
+---
+leds G.......
+leds Y.......
+leds G.......

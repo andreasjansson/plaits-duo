@@ -51,7 +51,6 @@ void DuoSpeechEngine::Init(BufferAllocator* allocator) {
   }
   word_bank_quantizer_.Init();
   word_bank_seen_by_second_voice_ = -1;
-  quadrature_.Init();
 
   excitation_buffer_[0] = allocator->Allocate<float>(kMaxBlockSize);
   excitation_buffer_[1] = allocator->Allocate<float>(kMaxBlockSize);
@@ -65,7 +64,6 @@ void DuoSpeechEngine::Init(BufferAllocator* allocator) {
 void DuoSpeechEngine::Reset() {
   lpc_speech_synth_word_bank_.Reset();
   word_bank_seen_by_second_voice_ = -1;
-  quadrature_.Init();
 }
 
 void DuoSpeechEngine::Render(
@@ -211,13 +209,10 @@ void DuoSpeechEngine::Render(
     word_bank_seen_by_second_voice_ = -1;
   }
 
-  if (stereo) {
-    if (num_voices == 2 && !voices_mixed) {
-      for (size_t i = 0; i < size; ++i) {
-        out[i] += aux[i];
-      }
+  if (stereo && num_voices == 2 && !voices_mixed) {
+    for (size_t i = 0; i < size; ++i) {
+      out[i] += aux[i];
     }
-    quadrature_.ProcessVoices(out, aux, 1, 1.0f, 0.0f, size);
   }
 }
 

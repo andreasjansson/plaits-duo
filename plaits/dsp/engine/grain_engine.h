@@ -32,7 +32,7 @@
 #include "stmlib/dsp/filter.h"
 
 #include "plaits/dsp/engine/engine.h"
-#include "plaits/dsp/oscillator/grainlet_oscillator.h"
+#include "plaits/dsp/oscillator/dual_grainlet_oscillator.h"
 #include "plaits/dsp/oscillator/vosim_oscillator.h"
 #include "plaits/dsp/oscillator/z_oscillator.h"
 
@@ -52,12 +52,14 @@ class GrainEngine : public Engine {
       bool* already_enveloped);
     
  private:
-  GrainletOscillator grainlet_[2];
+  // The two grainlets of OUT (they share the same carrier).
+  DualGrainletOscillator grainlet_;
   // VOSIMOscillator vosim_oscillator_;
   ZOscillator z_oscillator_;
   stmlib::OnePole dc_blocker_[2];
   
   float grain_balance_;
+  float* temp_buffer_;
   
   DISALLOW_COPY_AND_ASSIGN(GrainEngine);
 };

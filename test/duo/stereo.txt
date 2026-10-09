@@ -1,0 +1,232 @@
+===
+classic waveforms (one saw per channel, slightly detuned): the two channels have the same level in every octave band, and the image is wide and, on average, centered
+===
+./stereo_image 0 1 0
+./stereo_image 0 2 0
+---
+level difference: {{ d1 }} dB
+lean: {{ l1 }}
+correlation: {{ c1 }}
+bass correlation: none
+level difference: {{ d2 }} dB
+lean: {{ l2 }}
+correlation: {{ c2 }}
+bass correlation: none
+---
+where
+* d1 < 3
+* abs(l1) < 0.25
+* c1 < 0.9
+* d2 < 3
+* abs(l2) < 0.25
+* c2 < 0.9
+
+===
+waveshaper (wavefolders offset in opposite directions in the two channels): the two channels have the same level in every octave band, and the image is wide and, on average, centered
+===
+./stereo_image 1 1 0
+./stereo_image 1 2 0
+---
+level difference: {{ d1 }} dB
+lean: {{ l1 }}
+correlation: {{ c1 }}
+bass correlation: none
+level difference: {{ d2 }} dB
+lean: {{ l2 }}
+correlation: {{ c2 }}
+bass correlation: none
+---
+where
+* d1 < 3
+* abs(l1) < 0.25
+* c1 < 0.9
+* d2 < 3
+* abs(l2) < 0.25
+* c2 < 0.9
+
+===
+2-operator FM (diffuser): the two channels have the same level in every octave band, and the image is wide and, on average, centered
+===
+./stereo_image 2 1 0
+./stereo_image 2 2 0
+---
+level difference: {{ d1 }} dB
+lean: {{ l1 }}
+correlation: {{ c1 }}
+bass correlation: none
+level difference: {{ d2 }} dB
+lean: {{ l2 }}
+correlation: {{ c2 }}
+bass correlation: none
+---
+where
+* d1 < 3
+* abs(l1) < 0.25
+* c1 < 0.9
+* d2 < 3
+* abs(l2) < 0.25
+* c2 < 0.9
+
+===
+formant (diffuser): the two channels have the same level in every octave band, and the image is wide and, on average, centered
+===
+./stereo_image 3 1 0
+./stereo_image 3 2 0
+---
+level difference: {{ d1 }} dB
+lean: {{ l1 }}
+correlation: {{ c1 }}
+bass correlation: none
+level difference: {{ d2 }} dB
+lean: {{ l2 }}
+correlation: {{ c2 }}
+bass correlation: none
+---
+where
+* d1 < 3
+* abs(l1) < 0.25
+* c1 < 0.9
+* d2 < 3
+* abs(l2) < 0.25
+* c2 < 0.9
+
+===
+harmonic (each harmonic with its own, slowly changing, phase difference): the two channels have the same level in every octave band, and the image is wide and, on average, centered
+===
+./stereo_image 4 1 0
+./stereo_image 4 2 0
+---
+level difference: {{ d1 }} dB
+lean: {{ l1 }}
+correlation: {{ c1 }}
+bass correlation: none
+level difference: {{ d2 }} dB
+lean: {{ l2 }}
+correlation: {{ c2 }}
+bass correlation: none
+---
+where
+* d1 < 3
+* abs(l1) < 0.25
+* c1 < 0.9
+* d2 < 3
+* abs(l2) < 0.25
+* c2 < 0.9
+
+===
+wavetable (chorus): the two channels have the same level in every octave band, and the image is wide and, on average, centered
+===
+./stereo_image 5 1 0
+./stereo_image 5 2 0
+---
+level difference: {{ d1 }} dB
+lean: {{ l1 }}
+correlation: {{ c1 }}
+bass correlation: none
+level difference: {{ d2 }} dB
+lean: {{ l2 }}
+correlation: {{ c2 }}
+bass correlation: none
+---
+where
+* d1 < 3
+* abs(l1) < 0.25
+* c1 < 0.9
+* d2 < 3
+* abs(l2) < 0.25
+* c2 < 0.9
+
+===
+string (ensemble): the two channels have the same level in every octave band, and the image is wide and, on average, centered
+===
+./stereo_image 6 1 0
+./stereo_image 6 2 0
+---
+level difference: {{ d1 }} dB
+lean: {{ l1 }}
+correlation: {{ c1 }}
+bass correlation: {{ b1 }}
+level difference: {{ d2 }} dB
+lean: {{ l2 }}
+correlation: {{ c2 }}
+bass correlation: {{ b2 }}
+---
+where
+* d1 < 3
+* abs(l1) < 0.25
+* c1 < 0.9
+* d2 < 3
+* abs(l2) < 0.25
+* c2 < 0.9
+
+===
+vowel (diffuser): the two channels have the same level in every octave band, and the image is wide and, on average, centered
+===
+./stereo_image 7 1 0
+./stereo_image 7 2 0
+---
+level difference: {{ d1 }} dB
+lean: {{ l1 }}
+correlation: {{ c1 }}
+bass correlation: none
+level difference: {{ d2 }} dB
+lean: {{ l2 }}
+correlation: {{ c2 }}
+bass correlation: none
+---
+where
+* d1 < 3
+* abs(l1) < 0.25
+* c1 < 0.9
+* d2 < 3
+* abs(l2) < 0.25
+* c2 < 0.9
+
+===
+the bass stays in the middle (low notes): waveshaper, FM, formant, wavetable, string and vowel
+===
+for model in 1 2 3 5 6 7; do ./stereo_image $model 1 -2 | grep bass; done
+---
+bass correlation: {{ waveshaper }}
+bass correlation: {{ fm }}
+bass correlation: {{ formant }}
+bass correlation: {{ wavetable }}
+bass correlation: {{ strings }}
+bass correlation: {{ vowel }}
+---
+where
+* waveshaper > 0.85
+* fm > 0.85
+* formant > 0.85
+* wavetable > 0.85
+* strings > 0.85
+* vowel > 0.85
+
+===
+harmonic: the fundamental is the same in both channels
+===
+printf 'wait 500ms\ntap both\n' > model.txt
+./taps left 4 >> model.txt
+printf 'knob harmonics 0\nknob timbre 0\nknob morph 1\ncv v_oct -1\nwait 500ms\nclear\nwait 2s\n' >> model.txt
+plaits-sim -o fundamental.wav < model.txt
+plaits-analyze image fundamental.wav | grep correlation
+---
+correlation: +1.00
+bass correlation: +1.00
+
+===
+in the split layout, the two voices are not processed: MAIN and AUX are the same
+===
+for model in 0 1 2 3 4 5 6 7; do
+  { echo "wait 500ms"; echo "tap both"; ./taps left $model; echo "tap right"; echo "wait 500ms"; echo "clear"; echo "wait 1s"; } | plaits-sim -o split.wav
+  plaits-analyze diff split.wav:main split.wav:aux
+done
+---
+max_diff=0
+max_diff=0
+max_diff=0
+max_diff=0
+max_diff=0
+max_diff=0
+max_diff=0
+max_diff=0

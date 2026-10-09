@@ -132,35 +132,72 @@ void FMEngine::Render(
   ParameterInterpolator feedback_modulation(
       &previous_feedback_, 2.0f * parameters.morph - 1.0f, size);
   
-  Downsampler carrier_downsampler(&carrier_fir_);
-  Downsampler sub_downsampler(&sub_fir_);
+  // The sub-oscillator (AUX) is rendered in a second pass, from the carrier
+  // and the parameters of the first one - and not at all in duo mode, where
+  // AUX is not used.
+  float carrier_buffer[kMaxBlockSize * kOversampling];
+  float amount_buffer[kMaxBlockSize];
+  uint32_t carrier_increment_buffer[kMaxBlockSize];
   
-  while (size--) {
-    const float amount = amount_modulation.Next();
-    const float feedback = feedback_modulation.Next();
-    float phase_feedback = feedback < 0.0f ? 0.5f * feedback * feedback : 0.0f;
-    const uint32_t carrier_increment = static_cast<uint32_t>(
-        4294967296.0f * carrier_frequency.Next());
-    float _modulator_frequency = modulator_frequency.Next();
-
+  {
+    // (The state is kept in local variables, since it could otherwise be
+    // aliased by the buffers.)
+    uint32_t modulator_phase = modulator_phase_;
+    uint32_t carrier_phase = carrier_phase_;
+    float previous_sample = previous_sample_;
+    Downsampler carrier_downsampler(&carrier_fir_);
+    for (size_t i = 0; i < size; ++i) {
+      const float amount = amount_modulation.Next();
+      const float feedback = feedback_modulation.Next();
+      float phase_feedback = feedback < 0.0f
+          ? 0.5f * feedback * feedback
+          : 0.0f;
+      const uint32_t carrier_increment = static_cast<uint32_t>(
+          4294967296.0f * carrier_frequency.Next());
+      float _modulator_frequency = modulator_frequency.Next();
+      amount_buffer[i] = amount;
+      carrier_increment_buffer[i] = carrier_increment;
+      
+      for (size_t j = 0; j < kOversampling; ++j) {
+        modulator_phase += static_cast<uint32_t>(4294967296.0f * \
+             _modulator_frequency * (1.0f + previous_sample * phase_feedback));
+        carrier_phase += carrier_increment;
+        float modulator_fb = feedback > 0.0f
+            ? 0.25f * feedback * feedback
+            : 0.0f;
+        float modulator = SinePM(
+            modulator_phase, modulator_fb * previous_sample);
+        float carrier = SinePM(carrier_phase, amount * modulator);
+        ONE_POLE(previous_sample, carrier, 0.05f);
+        carrier_downsampler.Accumulate(j, carrier);
+        carrier_buffer[i * kOversampling + j] = carrier;
+      }
+      
+      out[i] = carrier_downsampler.Read();
+    }
+    modulator_phase_ = modulator_phase;
+    carrier_phase_ = carrier_phase;
+    previous_sample_ = previous_sample;
+  }
+  
+  if (!aux) {
+    return;
+  }
+  
+  uint32_t sub_phase = sub_phase_;
+  Downsampler sub_downsampler(&sub_fir_);
+  for (size_t i = 0; i < size; ++i) {
+    const float amount = amount_buffer[i];
+    const uint32_t carrier_increment = carrier_increment_buffer[i];
     for (size_t j = 0; j < kOversampling; ++j) {
-      modulator_phase_ += static_cast<uint32_t>(4294967296.0f * \
-           _modulator_frequency * (1.0f + previous_sample_ * phase_feedback));
-      carrier_phase_ += carrier_increment;
-      sub_phase_ += carrier_increment >> 1;
-      float modulator_fb = feedback > 0.0f ? 0.25f * feedback * feedback : 0.0f;
-      float modulator = SinePM(
-          modulator_phase_, modulator_fb * previous_sample_);
-      float carrier = SinePM(carrier_phase_, amount * modulator);
-      float sub = SinePM(sub_phase_, amount * carrier * 0.25f);
-      ONE_POLE(previous_sample_, carrier, 0.05f);
-      carrier_downsampler.Accumulate(j, carrier);
+      sub_phase += carrier_increment >> 1;
+      const float carrier = carrier_buffer[i * kOversampling + j];
+      float sub = SinePM(sub_phase, amount * carrier * 0.25f);
       sub_downsampler.Accumulate(j, sub);
     }
-    
-    *out++ = carrier_downsampler.Read();
-    *aux++ = sub_downsampler.Read();
+    aux[i] = sub_downsampler.Read();
   }
+  sub_phase_ = sub_phase;
 }
 
 }  // namespace plaits

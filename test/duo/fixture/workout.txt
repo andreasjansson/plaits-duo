@@ -1,0 +1,42 @@
+# A tour of the controls of the module: knobs, CVs and triggers (LEVEL is
+# left unpatched: in duo mode, it is the pitch of the second voice).
+knob frequency 0.6
+knob harmonics 0.3
+knob timbre 0.4
+knob morph 0.6
+wait 300ms
+
+# Pitch changes on V/OCT.
+cv v_oct 0
+wait 200ms
+cv v_oct 0.583
+wait 200ms
+knob timbre 0.8
+knob morph 0.2
+knob harmonics 0.7
+wait 200ms
+
+# FM, TIMBRE and MORPH CVs, with their attenuverters.
+knob fm_cv 0.8
+cv fm 0.5
+knob timbre_cv 0.3
+cv timbre 2
+knob morph_cv 0.7
+cv morph -1
+wait 300ms
+
+# Triggers: low-pass gate and internal envelope.
+trigger
+wait 150ms
+cv v_oct 1.25
+trigger
+wait 150ms
+unpatch fm
+unpatch timbre
+unpatch morph
+trigger
+wait 250ms
+
+unpatch trigger
+knob harmonics 0.05
+wait 300ms

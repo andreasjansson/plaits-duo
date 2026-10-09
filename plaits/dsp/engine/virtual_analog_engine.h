@@ -30,6 +30,7 @@
 #define PLAITS_DSP_ENGINE_VIRTUAL_ANALOG_ENGINE_H_
 
 #include "plaits/dsp/engine/engine.h"
+#include "plaits/dsp/oscillator/dual_variable_saw_oscillator.h"
 #include "plaits/dsp/oscillator/variable_saw_oscillator.h"
 #include "plaits/dsp/oscillator/variable_shape_oscillator.h"
 
@@ -50,6 +51,16 @@ class VirtualAnalogEngine : public Engine {
       size_t size,
       bool* already_enveloped);
   
+  // Used in duo mode: renders OUT in stereo. The square is the same in both
+  // channels, and each channel has its own saw: the left one detuned by
+  // 1 / saw_ratio, the right one by saw_ratio. AUX is not rendered.
+  void RenderStereo(
+      const EngineParameters& parameters,
+      float saw_ratio,
+      float* left,
+      float* right,
+      size_t size);
+  
  private:
   float ComputeDetuning(float detune) const;
   
@@ -58,6 +69,7 @@ class VirtualAnalogEngine : public Engine {
 
   VariableShapeOscillator sync_;
   VariableSawOscillator variable_saw_;
+  DualVariableSawOscillator stereo_saw_;
 
   float auxiliary_amount_;
   float xmod_amount_;

@@ -37,8 +37,39 @@ using namespace stmlib;
 // Gain applied to each voice when the two voices are mixed together.
 const float kDuoMixGain = 0.6f;
 
-// Headroom for the models in which quadrature processing raises the peaks.
-const float kQuadratureHeadroom = 0.6f;
+struct DuoEngineSettings {
+  bool already_enveloped;
+  float split_gain;
+  float stereo_gain;
+  DuoStereoLayout layout;
+  DuoStereoEffect effect;
+};
+
+// Split layout: same gains as the OUT signal of the original engines.
+// Stereo layout: each model has its own way of making a stereo signal
+// (chosen by ear), at the same loudness as in the split layout. The phase
+// changes made by the diffuser raise the peaks of FM sounds, which go
+// through a limiter, like the string and speech models.
+const DuoEngineSettings kDuoEngineSettings[kNumDuoEngines] = {
+  // Classic waveforms: one saw per channel (see DuoVirtualAnalogEngine).
+  { false, 0.8f, 0.8f, DUO_STEREO_NATIVE, DUO_STEREO_EFFECT_NONE },
+  // Waveshaper: mirrored wavefolders (see DuoWaveshapingEngine).
+  { false, 0.7f, 0.7f, DUO_STEREO_NATIVE, DUO_STEREO_EFFECT_NONE },
+  // 2-operator FM.
+  { false, 0.6f, -0.75f, DUO_STEREO_VOICES, DUO_STEREO_EFFECT_DIFFUSER },
+  // Formant.
+  { false, 0.7f, 0.7f, DUO_STEREO_VOICES, DUO_STEREO_EFFECT_DIFFUSER },
+  // Harmonic: each harmonic has its own phase difference between the
+  // channels (see DuoAdditiveEngine).
+  { false, 0.8f, 0.8f, DUO_STEREO_NATIVE, DUO_STEREO_EFFECT_NONE },
+  // Wavetable.
+  { false, 0.6f, 0.6f, DUO_STEREO_VOICES, DUO_STEREO_EFFECT_CHORUS },
+  // String.
+  { true, -1.0f, -1.0f, DUO_STEREO_MIX, DUO_STEREO_EFFECT_ENSEMBLE },
+  // Vowel.
+  { false, -0.7f, -0.7f, DUO_STEREO_MIX, DUO_STEREO_EFFECT_DIFFUSER },
+};
+
 
 void DuoVoice::Init(BufferAllocator* allocator) {
   engines_[0] = &virtual_analog_engine_;
@@ -50,20 +81,10 @@ void DuoVoice::Init(BufferAllocator* allocator) {
   engines_[6] = &string_engine_;
   engines_[7] = &speech_engine_;
 
-  // Split layout: same gains as the OUT signal of the original engines.
-  // Stereo layout: the quadrature processing increases the peak level of FM
-  // and wavetable signals (by up to 1.8x), which needs more headroom. The
-  // string and speech models go through a limiter anyway.
-  virtual_analog_engine_.set_post_processing_settings(false, 0.8f, 0.8f);
-  waveshaping_engine_.set_post_processing_settings(false, 0.7f, 0.7f);
-  fm_engine_.set_post_processing_settings(false, 0.6f, 0.6f * kQuadratureHeadroom);
-  grain_engine_.set_post_processing_settings(false, 0.7f, 0.7f);
-  additive_engine_.set_post_processing_settings(false, 0.8f, 0.8f);
-  wavetable_engine_.set_post_processing_settings(false, 0.6f, 0.6f * kQuadratureHeadroom);
-  string_engine_.set_post_processing_settings(true, -1.0f, -1.0f);
-  speech_engine_.set_post_processing_settings(false, -0.7f, -0.7f);
-
   for (int i = 0; i < kNumDuoEngines; ++i) {
+    const DuoEngineSettings& s = kDuoEngineSettings[i];
+    engines_[i]->set_post_processing_settings(
+        s.already_enveloped, s.split_gain, s.stereo_gain, s.layout, s.effect);
     // All engines share the same RAM space - also with the engines of the
     // original voice.
     allocator->Free();
@@ -76,6 +97,7 @@ void DuoVoice::Init(BufferAllocator* allocator) {
 
   out_post_processor_.Init();
   aux_post_processor_.Init();
+  stereo_.Init();
 
   decay_envelope_.Init();
   lpg_envelope_.Init();
@@ -130,6 +152,7 @@ void DuoVoice::Render(
     e->Reset();
     out_post_processor_.Reset();
     aux_post_processor_.Reset();
+    stereo_.set_effect(e->stereo_effect);
     previous_engine_index_ = engine_index;
   }
 
@@ -226,10 +249,21 @@ void DuoVoice::Render(
       120.0f);
 
   bool already_enveloped = pp_s.already_enveloped;
+  const DuoStereoLayout layout = e->stereo_layout;
   e->Render(
-      p, num_voices, stereo, out_buffer_, aux_buffer_, size,
+      p, num_voices, stereo && layout != DUO_STEREO_VOICES,
+      out_buffer_, aux_buffer_, size,
       &already_enveloped);
-  if (!stereo && num_voices == 1) {
+  if (stereo && layout == DUO_STEREO_NATIVE) {
+    // The engine has rendered the two channels.
+  } else if (stereo) {
+    if (layout == DUO_STEREO_VOICES && num_voices == 2) {
+      for (size_t i = 0; i < size; ++i) {
+        out_buffer_[i] += aux_buffer_[i];
+      }
+    }
+    stereo_.Process(out_buffer_, aux_buffer_, size);
+  } else if (num_voices == 1) {
     copy(&out_buffer_[0], &out_buffer_[size], &aux_buffer_[0]);
   }
 
@@ -247,6 +281,12 @@ void DuoVoice::Render(
   float gain = stereo ? pp_s.aux_gain : pp_s.out_gain;
   if (stereo && num_voices == 2) {
     gain *= kDuoMixGain;
+  }
+  if (stereo && gain < 0.0f) {
+    // The same gain reduction for both channels, so that limiting never
+    // makes one side louder than the other.
+    stereo_.Limit(-gain, out_buffer_, aux_buffer_, size);
+    gain = 1.0f;
   }
 
   out_post_processor_.Process(

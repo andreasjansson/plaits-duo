@@ -33,7 +33,7 @@
 #include "plaits/dsp/oscillator/oscillator.h"
 
 namespace plaits {
-  
+
 class WaveshapingEngine : public Engine {
  public:
   WaveshapingEngine() { }
@@ -47,7 +47,25 @@ class WaveshapingEngine : public Engine {
       size_t size,
       bool* already_enveloped);
   
+  // Used in duo mode: renders OUT in stereo. The waveshaped signal goes
+  // through two wavefolders, offset by +fold_offset for the left channel and
+  // -fold_offset for the right channel. AUX is not rendered.
+  void RenderStereo(
+      const EngineParameters& parameters,
+      float fold_offset,
+      float* left,
+      float* right,
+      size_t size);
+  
  private:
+  void RenderInternal(
+      const EngineParameters& parameters,
+      float fold_offset,
+      bool stereo,
+      float* out,
+      float* aux,
+      size_t size);
+  
   Oscillator slope_;
   Oscillator triangle_;
   float previous_shape_;

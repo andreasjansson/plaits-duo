@@ -40,6 +40,16 @@ using namespace stmlib;
 
 static const int32_t kLongPressTime = 2000;
 
+// In ms (the LEDs are updated at 1kHz).
+static const int kDuoAnimationStepDuration = 80;
+static const int kDuoAnimationDuration = 4 * kDuoAnimationStepDuration;
+
+// Semitones per unit of (calibrated) LEVEL CV, when the LEVEL input has not
+// been calibrated for pitch. The LEVEL input has the same input stage as the
+// V/OCT input, whose nominal scale is 60 semitones per unit of ADC reading,
+// and the default scale of the LEVEL channel is 0.6 per unit.
+static const float kDefaultLevelNoteScale = 60.0f / 0.6f;
+
 #define ENABLE_LFO_MODE
 
 void Ui::Init(Patch* patch, Modulations* modulations, Settings* settings) {
@@ -101,11 +111,17 @@ void Ui::Init(Patch* patch, Modulations* modulations, Settings* settings) {
   cv_c1_ = 0.0f;
   pitch_lp_ = 0.0f;
   pitch_lp_calibration_ = 0.0f;
+  level_pitch_lp_ = 0.0f;
+  level_pitch_lp_calibration_ = 0.0f;
+  calibrating_level_ = false;
+  duo_animation_ = 0;
 }
 
 void Ui::LoadState() {
   const State& state = settings_->state();
   patch_->engine = state.engine;
+  patch_->duo_mode = state.duo_mode;
+  patch_->duo_engine = state.duo_engine;
   patch_->lpg_colour = static_cast<float>(state.lpg_colour) / 256.0f;
   patch_->decay = static_cast<float>(state.decay) / 256.0f;
   octave_ = static_cast<float>(state.octave) / 256.0f;
@@ -114,6 +130,8 @@ void Ui::LoadState() {
 void Ui::SaveState() {
   State* state = settings_->mutable_state();
   state->engine = patch_->engine;
+  state->duo_mode = patch_->duo_mode;
+  state->duo_engine = patch_->duo_engine;
   state->lpg_colour = static_cast<uint8_t>(patch_->lpg_colour * 256.0f);
   state->decay = static_cast<uint8_t>(patch_->decay * 256.0f);
   state->octave = static_cast<uint8_t>(octave_ * 256.0f);
@@ -137,13 +155,34 @@ void Ui::UpdateLEDs() {
         LedColor green = settings_->state().color_blind == 1
             ? LED_COLOR_YELLOW
             : LED_COLOR_GREEN;
+        const int selected_engine = patch_->duo_mode
+            ? patch_->duo_engine
+            : patch_->engine;
+        
+        if (duo_animation_) {
+          // Entering duo mode: a pair of LEDs moves from the center to the
+          // edges. Leaving duo mode: from the edges to the center.
+          --duo_animation_;
+          int step = 3 - duo_animation_ / kDuoAnimationStepDuration;
+          int distance = patch_->duo_mode ? step : 3 - step;
+          leds_.set(3 - distance, LED_COLOR_YELLOW);
+          leds_.set(4 + distance, LED_COLOR_YELLOW);
+          break;
+        }
+        
+        // In duo mode, the LED goes off twice briefly every 2 seconds.
+        int t = pwm_counter_ & 2047;
+        if (patch_->duo_mode && (t < 60 || (t >= 180 && t < 240))) {
+          break;
+        }
+        
         leds_.set(
             active_engine_ & 7,
             active_engine_ & 8 ? red : green);
         if (pwm_counter < triangle) {
           leds_.mask(
-              patch_->engine & 7,
-              patch_->engine & 8 ? red : green);
+              selected_engine & 7,
+              selected_engine & 8 ? red : green);
         }
       }
       break;
@@ -193,13 +232,13 @@ void Ui::UpdateLEDs() {
       
     case UI_MODE_CALIBRATION_C1:
       if (pwm_counter < triangle) {
-        leds_.set(0, LED_COLOR_GREEN);
+        leds_.set(calibrating_level_ ? 7 : 0, LED_COLOR_GREEN);
       }
       break;
 
     case UI_MODE_CALIBRATION_C3:
       if (pwm_counter < triangle) {
-        leds_.set(0, LED_COLOR_YELLOW);
+        leds_.set(calibrating_level_ ? 7 : 0, LED_COLOR_YELLOW);
       }
       break;
     
@@ -224,6 +263,32 @@ void Ui::UpdateLEDs() {
       break;
   }
   leds_.Write();
+}
+
+void Ui::Navigate(int button) {
+  RealignPots();
+  int* engine = patch_->duo_mode ? &patch_->duo_engine : &patch_->engine;
+  if (button == 0) {
+    if (*engine >= 8) {
+      *engine = *engine & 7;
+    } else {
+      *engine = (*engine + 1) % 8;
+    }
+  } else {
+    if (*engine < 8) {
+      *engine = (*engine & 7) + 8;
+    } else {
+      *engine = 8 + ((*engine + 1) % 8);
+    }
+  }
+  SaveState();
+}
+
+void Ui::ToggleDuoMode() {
+  RealignPots();
+  patch_->duo_mode = !patch_->duo_mode;
+  duo_animation_ = kDuoAnimationDuration;
+  SaveState();
 }
 
 void Ui::ReadSwitches() {
@@ -266,7 +331,8 @@ void Ui::ReadSwitches() {
             press_time_[1] >= kLongPressTime) {
           press_time_[0] = press_time_[1] = 0;
           RealignPots();
-          StartCalibration();
+          // In duo mode, the LEVEL input is calibrated instead of V/OCT.
+          StartCalibration(patch_->duo_mode);
         }
         
         // Long press or actually editing any hidden parameter: display value
@@ -280,24 +346,27 @@ void Ui::ReadSwitches() {
           mode_ = UI_MODE_DISPLAY_OCTAVE;
         }
         
-        if (switches_.released(Switch(0)) && !ignore_release_[0]) {
-          RealignPots();
-          if (patch_->engine >= 8) {
-            patch_->engine = patch_->engine & 7;
-          } else {
-            patch_->engine = (patch_->engine + 1) % 8;
-          }
-          SaveState();
+        // A button released while the other one is still held (or is
+        // released at the same time): toggle duo mode, and ignore the release
+        // of the other button.
+        bool released[SWITCH_LAST];
+        for (int i = 0; i < SWITCH_LAST; ++i) {
+          released[i] = switches_.released(Switch(i)) && !ignore_release_[i];
         }
-  
-        if (switches_.released(Switch(1)) && !ignore_release_[1]) {
-          RealignPots();
-          if (patch_->engine < 8) {
-            patch_->engine = (patch_->engine & 7) + 8;
-          } else {
-            patch_->engine = 8 + ((patch_->engine + 1) % 8);
+        bool both = false;
+        for (int i = 0; i < SWITCH_LAST; ++i) {
+          const int other = 1 - i;
+          if (released[i] && (press_time_[other] > 0 || released[other])) {
+            both = true;
           }
-          SaveState();
+        }
+        if (both) {
+          ignore_release_[0] = ignore_release_[1] = true;
+          ToggleDuoMode();
+        } else if (released[0]) {
+          Navigate(0);
+        } else if (released[1]) {
+          Navigate(1);
         }
       }
       break;
@@ -406,6 +475,16 @@ void Ui::Poll() {
       pitch_lp_calibration_, cv_adc_.float_value(CV_ADC_CHANNEL_V_OCT), 0.1f);
   modulations_->note = pitch_lp_;
   
+  // LEVEL as a pitch CV, for duo mode. Same smoothing as V/OCT.
+  const float level = cv_adc_.float_value(CV_ADC_CHANNEL_LEVEL);
+  const PersistentData& p = settings_->persistent_data();
+  const float level_note = p.level_note_scale != 0.0f
+      ? level * p.level_note_scale + p.level_note_offset
+      : modulations_->level * kDefaultLevelNoteScale;
+  ONE_POLE(level_pitch_lp_, level_note, 0.7f);
+  ONE_POLE(level_pitch_lp_calibration_, level, 0.1f);
+  modulations_->level_note = level_pitch_lp_;
+  
   ui_task_ = (ui_task_ + 1) % 4;
   switch (ui_task_) {
     case 0:
@@ -449,12 +528,21 @@ void Ui::Poll() {
 #endif  // ENABLE_LFO_MODE
 }
 
-void Ui::StartCalibration() {
+void Ui::StartCalibration(bool level) {
   mode_ = UI_MODE_CALIBRATION_C1;
+  calibrating_level_ = level;
   normalization_probe_.Disable();
 }
 
 void Ui::CalibrateC1() {
+  if (calibrating_level_) {
+    // 1V is patched into LEVEL. The offsets of the other channels are left
+    // untouched.
+    cv_c1_ = level_pitch_lp_calibration_;
+    mode_ = UI_MODE_CALIBRATION_C3;
+    return;
+  }
+
   // Acquire offsets for all channels.
   for (int i = 0; i < CV_ADC_CHANNEL_LAST; ++i) {
     if (i != CV_ADC_CHANNEL_V_OCT) {
@@ -471,10 +559,22 @@ void Ui::CalibrateC3() {
   float c1 = cv_c1_;
 
   // (-33/100.0*1 + -33/140.0 * -10.0) / 3.3 * 2.0 - 1 = -0.171
-  float c3 = pitch_lp_calibration_;
+  float c3 = calibrating_level_
+      ? level_pitch_lp_calibration_
+      : pitch_lp_calibration_;
   float delta = c3 - c1;
   
-  if (delta > -0.6f && delta < -0.2f) {
+  if (calibrating_level_) {
+    if (delta > -0.6f && delta < -0.2f) {
+      PersistentData* p = settings_->mutable_persistent_data();
+      p->level_note_scale = 24.0f / delta;
+      p->level_note_offset = 12.0f - p->level_note_scale * c1;
+      settings_->SavePersistentData();
+      mode_ = UI_MODE_NORMAL;
+    } else {
+      mode_ = UI_MODE_ERROR;
+    }
+  } else if (delta > -0.6f && delta < -0.2f) {
     ChannelCalibrationData* c = settings_->mutable_calibration_data(
         CV_ADC_CHANNEL_V_OCT);
     c->scale = 24.0f / delta;
@@ -521,7 +621,7 @@ uint8_t Ui::HandleFactoryTestingRequest(uint8_t command) {
         switch (argument) {
           case 0:
             patch_->engine = 0;
-            StartCalibration();
+            StartCalibration(false);
             break;
           
           case 1:

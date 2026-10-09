@@ -1,0 +1,99 @@
+===
+classic waveforms
+===
+{ echo "wait 500ms"; echo "tap both"; ./taps left 0; echo "tap right"; echo "reboot"; echo "clear"; cat workout.txt; } | plaits-sim -o duo.wav
+{ echo "wait 500ms"; ./taps left 0; echo "reboot"; echo "clear"; cat workout.txt; } | plaits-sim-v1.1 -o original.wav
+plaits-analyze diff duo.wav:main original.wav:main
+plaits-analyze diff duo.wav:aux duo.wav:main
+---
+max_diff=0
+max_diff=0
+
+===
+waveshaper
+===
+{ echo "wait 500ms"; echo "tap both"; ./taps left 1; echo "tap right"; echo "reboot"; echo "clear"; cat workout.txt; } | plaits-sim -o duo.wav
+{ echo "wait 500ms"; ./taps left 1; echo "reboot"; echo "clear"; cat workout.txt; } | plaits-sim-v1.1 -o original.wav
+plaits-analyze diff duo.wav:main original.wav:main
+plaits-analyze diff duo.wav:aux duo.wav:main
+---
+max_diff=0
+max_diff=0
+
+===
+2-op FM
+===
+{ echo "wait 500ms"; echo "tap both"; ./taps left 2; echo "tap right"; echo "reboot"; echo "clear"; cat workout.txt; } | plaits-sim -o duo.wav
+{ echo "wait 500ms"; ./taps left 2; echo "reboot"; echo "clear"; cat workout.txt; } | plaits-sim-v1.1 -o original.wav
+plaits-analyze diff duo.wav:main original.wav:main
+plaits-analyze diff duo.wav:aux duo.wav:main
+---
+max_diff=0
+max_diff=0
+
+===
+formant
+===
+{ echo "wait 500ms"; echo "tap both"; ./taps left 3; echo "tap right"; echo "reboot"; echo "clear"; cat workout.txt; } | plaits-sim -o duo.wav
+{ echo "wait 500ms"; ./taps left 3; echo "reboot"; echo "clear"; cat workout.txt; } | plaits-sim-v1.1 -o original.wav
+plaits-analyze diff duo.wav:main original.wav:main
+plaits-analyze diff duo.wav:aux duo.wav:main
+---
+max_diff=0
+max_diff=0
+
+===
+harmonic
+===
+{ echo "wait 500ms"; echo "tap both"; ./taps left 4; echo "tap right"; echo "reboot"; echo "clear"; cat workout.txt; } | plaits-sim -o duo.wav
+{ echo "wait 500ms"; ./taps left 4; echo "reboot"; echo "clear"; cat workout.txt; } | plaits-sim-v1.1 -o original.wav
+plaits-analyze diff duo.wav:main original.wav:main
+plaits-analyze diff duo.wav:aux duo.wav:main
+---
+max_diff={{ difference }}
+max_diff=0
+---
+where
+* difference <= 32
+
+===
+wavetable
+===
+{ echo "wait 500ms"; echo "tap both"; ./taps left 5; echo "tap right"; echo "reboot"; echo "clear"; cat workout.txt; } | plaits-sim -o duo.wav
+{ echo "wait 500ms"; ./taps left 5; echo "reboot"; echo "clear"; cat workout.txt; } | plaits-sim-v1.1 -o original.wav
+plaits-analyze diff duo.wav:main original.wav:main
+plaits-analyze diff duo.wav:aux duo.wav:main
+---
+max_diff={{ difference }}
+max_diff=0
+---
+where
+* difference <= 32
+
+===
+string (red 4 in the original firmware)
+===
+{ echo "wait 500ms"; echo "tap both"; ./taps left 6; echo "tap right"; echo "reboot"; echo "clear"; cat workout.txt; } | plaits-sim -o duo.wav
+{ echo "wait 500ms"; echo "tap right"; ./taps right 3; echo "reboot"; echo "clear"; cat workout.txt; } | plaits-sim-v1.1 -o original.wav
+plaits-analyze diff duo.wav:main original.wav:main
+plaits-analyze diff duo.wav:aux duo.wav:main
+---
+max_diff={{ difference }}
+max_diff=0
+---
+where
+* difference <= 32
+
+===
+vowel and speech
+===
+{ echo "wait 500ms"; echo "tap both"; ./taps left 7; echo "tap right"; echo "reboot"; echo "clear"; cat workout.txt; } | plaits-sim -o duo.wav
+{ echo "wait 500ms"; ./taps left 7; echo "reboot"; echo "clear"; cat workout.txt; } | plaits-sim-v1.1 -o original.wav
+plaits-analyze diff duo.wav:main original.wav:main
+plaits-analyze diff duo.wav:aux duo.wav:main
+---
+max_diff={{ difference }}
+max_diff=0
+---
+where
+* difference <= 32

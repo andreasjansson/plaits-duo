@@ -33,9 +33,7 @@
 // duo_naive_speech_synth.h) so that the formant settings are computed once
 // for both voices, and in stereo, the two voices share the same formant
 // filters.
-//
-// Stereo: the mix of the two voices goes through the quadrature stage (see
-// quadrature_stereo.h).
+
 
 #ifndef PLAITS_DSP_DUO_DUO_SPEECH_ENGINE_H_
 #define PLAITS_DSP_DUO_DUO_SPEECH_ENGINE_H_
@@ -44,7 +42,6 @@
 
 #include "plaits/dsp/duo/duo_engine.h"
 #include "plaits/dsp/duo/duo_naive_speech_synth.h"
-#include "plaits/dsp/duo/quadrature_stereo.h"
 #include "plaits/dsp/speech/lpc_speech_synth_controller.h"
 #include "plaits/dsp/speech/sam_speech_synth.h"
 
@@ -85,7 +82,6 @@ class DuoSpeechEngine : public DuoEngine {
   LPCSpeechSynthWordBank lpc_speech_synth_word_bank_;
   int word_bank_seen_by_second_voice_;
 
-  QuadratureStereo quadrature_;
 
   float* excitation_buffer_[2];
   float* temp_buffer_[2];

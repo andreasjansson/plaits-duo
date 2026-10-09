@@ -1,4 +1,3 @@
-// Copyright 2016 Emilie Gillet.
 // Copyright 2026 Andreas Jansson.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,59 +21,42 @@
 // See http://creativecommons.org/licenses/MIT/ for more information.
 //
 // -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 //
-// Duo version of the pair of classic waveforms (OUT of VirtualAnalogEngine,
-// VA_VARIANT 2).
+// Duo version of the classic waveforms. Each voice is a VirtualAnalogEngine,
+// rendering OUT only.
 //
-// Stereo: the two oscillators of the pair are placed on opposite sides of
-// the stereo field (square towards one side, variable saw towards the other,
-// mirrored for the second voice), so that the HARMONICS detuning becomes a
-// movement between the two channels.
+// Stereo: the variable square is the same in both channels, and each
+// channel has its own variable saw. The two saws are detuned in opposite
+// directions by 3 to 9 cents (slowly drifting), so that the beating between
+// the oscillators moves between the two channels.
 
 #ifndef PLAITS_DSP_DUO_DUO_VIRTUAL_ANALOG_ENGINE_H_
 #define PLAITS_DSP_DUO_DUO_VIRTUAL_ANALOG_ENGINE_H_
 
-#include "plaits/dsp/duo/duo_engine.h"
-#include "plaits/dsp/oscillator/variable_saw_oscillator.h"
-#include "plaits/dsp/oscillator/variable_shape_oscillator.h"
+#include "stmlib/dsp/units.h"
+
+#include "plaits/dsp/duo/duo_lfo.h"
+#include "plaits/dsp/duo/duo_original_engine.h"
+#include "plaits/dsp/engine/virtual_analog_engine.h"
 
 namespace plaits {
 
-class DuoVirtualAnalogVoice {
- public:
-  DuoVirtualAnalogVoice() { }
-  ~DuoVirtualAnalogVoice() { }
-
-  void Init();
-
-  // When right is NULL, writes the mono signal to left. Otherwise, adds the
-  // stereo signal to left and right.
-  void Render(
-      const EngineParameters& parameters,
-      bool mirror,
-      float* temp_square,
-      float* temp_saw,
-      float* left,
-      float* right,
-      size_t size);
-
- private:
-  VariableShapeOscillator square_;
-  VariableSawOscillator saw_;
-
-  float square_gain_;
-  float saw_gain_;
-
-  DISALLOW_COPY_AND_ASSIGN(DuoVirtualAnalogVoice);
-};
-
-class DuoVirtualAnalogEngine : public DuoEngine {
+class DuoVirtualAnalogEngine : public DuoOriginalEngine<VirtualAnalogEngine> {
  public:
   DuoVirtualAnalogEngine() { }
   ~DuoVirtualAnalogEngine() { }
 
-  virtual void Init(stmlib::BufferAllocator* allocator);
-  virtual void Reset();
+  virtual void Init(stmlib::BufferAllocator* allocator) {
+    DuoOriginalEngine<VirtualAnalogEngine>::Init(allocator);
+    temp_buffer_[0] = allocator->Allocate<float>(kMaxBlockSize);
+    temp_buffer_[1] = allocator->Allocate<float>(kMaxBlockSize);
+    for (int i = 0; i < kNumDuoVoices; ++i) {
+      drift_[i][0].Init(0.1f, 0.16f * i);
+      drift_[i][1].Init(0.037f, 0.32f * i);
+    }
+  }
+
   virtual void Render(
       const EngineParameters* parameters,
       int num_voices,
@@ -82,10 +64,32 @@ class DuoVirtualAnalogEngine : public DuoEngine {
       float* out,
       float* aux,
       size_t size,
-      bool* already_enveloped);
+      bool* already_enveloped) {
+    if (!stereo) {
+      DuoOriginalEngine<VirtualAnalogEngine>::Render(
+          parameters, num_voices, stereo, out, aux, size, already_enveloped);
+      return;
+    }
+    for (int i = 0; i < num_voices; ++i) {
+      const float cents = 6.0f + 3.0f * (
+          0.6f * drift_[i][0].Next(size) + 0.4f * drift_[i][1].Next(size));
+      voice_[i].RenderStereo(
+          parameters[i],
+          stmlib::SemitonesToRatio(0.005f * cents),
+          i == 0 ? out : temp_buffer_[0],
+          i == 0 ? aux : temp_buffer_[1],
+          size);
+    }
+    if (num_voices == 2) {
+      for (size_t j = 0; j < size; ++j) {
+        out[j] += temp_buffer_[0][j];
+        aux[j] += temp_buffer_[1][j];
+      }
+    }
+  }
 
  private:
-  DuoVirtualAnalogVoice voice_[kNumDuoVoices];
+  DuoLfo drift_[kNumDuoVoices][2];
   float* temp_buffer_[2];
 
   DISALLOW_COPY_AND_ASSIGN(DuoVirtualAnalogEngine);

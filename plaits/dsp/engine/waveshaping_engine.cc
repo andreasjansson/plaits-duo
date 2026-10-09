@@ -66,6 +66,25 @@ void WaveshapingEngine::Render(
     float* aux,
     size_t size,
     bool* already_enveloped) {
+  RenderInternal(parameters, 0.0f, false, out, aux, size);
+}
+
+void WaveshapingEngine::RenderStereo(
+    const EngineParameters& parameters,
+    float fold_offset,
+    float* left,
+    float* right,
+    size_t size) {
+  RenderInternal(parameters, fold_offset, true, left, right, size);
+}
+
+void WaveshapingEngine::RenderInternal(
+    const EngineParameters& parameters,
+    float fold_offset,
+    bool stereo,
+    float* out,
+    float* aux,
+    size_t size) {
   const float root = parameters.note;
   
   const float f0 = NoteToFrequency(root);
@@ -73,7 +92,9 @@ void WaveshapingEngine::Render(
   
   // Start from bandlimited slope signal.
   slope_.Render<OSCILLATOR_SHAPE_SLOPE>(f0, pw, out, size);
-  triangle_.Render<OSCILLATOR_SHAPE_SLOPE>(f0, 0.5f, aux, size);
+  if (!stereo) {
+    triangle_.Render<OSCILLATOR_SHAPE_SLOPE>(f0, 0.5f, aux, size);
+  }
 
   // Try to estimate how rich the spectrum is, and reduce the range of the
   // waveshaping control accordingly.
@@ -122,6 +143,15 @@ void WaveshapingEngine::Render(
     
     float mix = x + (y - x) * shape_fractional;
     float index = mix * wf_gain_modulation.Next() + 0.5f;
+    if (stereo) {
+      float index_l = index + fold_offset;
+      float index_r = index - fold_offset;
+      CONSTRAIN(index_l, 0.0f, 1.0f);
+      CONSTRAIN(index_r, 0.0f, 1.0f);
+      out[i] = InterpolateHermite(lut_fold + 1, index_l, 512.0f);
+      aux[i] = InterpolateHermite(lut_fold + 1, index_r, 512.0f);
+      continue;
+    }
     float fold = InterpolateHermite(
         lut_fold + 1, index, 512.0f);
     float fold_2 = -InterpolateHermite(

@@ -34,16 +34,8 @@ namespace plaits {
 using namespace std;
 using namespace stmlib;
 
-// Position of the strings in the stereo field.
-static const float string_pan[kDuoNumStrings][2] = {
-  { 0.9510565f, 0.3090170f },
-  { 0.3090170f, 0.9510565f },
-  { 0.70710678f, 0.70710678f },
-};
-
 void DuoStringEngine::Init(BufferAllocator* allocator) {
   temp_buffer_ = allocator->Allocate<float>(kMaxBlockSize);
-  string_buffer_ = allocator->Allocate<float>(kMaxBlockSize);
   for (int i = 0; i < kDuoNumStrings; ++i) {
     string_[i].Init(allocator);
   }
@@ -69,7 +61,6 @@ void DuoStringEngine::Reset() {
   active_string_[1] = kDuoNumStrings - 2;
   owner_[active_string_[1]] = 1;
   num_triggers_ = 0;
-  quadrature_.Init();
 }
 
 void DuoStringEngine::Allocate(int num_voices) {
@@ -132,22 +123,18 @@ void DuoStringEngine::Render(
     f0_delay_[v].Write(f0);
   }
 
-  if (!stereo) {
-    // The strings are directly added to the output of their voice.
-    fill(&out[0], &out[size], 0.0f);
-    if (num_voices == 2) {
-      fill(&aux[0], &aux[size], 0.0f);
-    }
-  } else {
-    fill(&string_buffer_[0], &string_buffer_[size], 0.0f);
+  // The strings are directly added to the output of their voice (or to the
+  // mix of the two voices in stereo).
+  const bool split = num_voices == 2 && !stereo;
+  fill(&out[0], &out[size], 0.0f);
+  if (split) {
+    fill(&aux[0], &aux[size], 0.0f);
   }
 
   for (int i = 0; i < kDuoNumStrings; ++i) {
     bool active = i == active_string_[0] || \
         (num_voices == 2 && i == active_string_[1]);
-    float* destination = stereo
-        ? string_buffer_
-        : ((num_voices == 2 && owner_[i] == 1) ? aux : out);
+    float* destination = (split && owner_[i] == 1) ? aux : out;
     string_[i].Render(
         (p.trigger & TRIGGER_UNPATCHED) && active,
         (p.trigger & TRIGGER_RISING_EDGE) && newly_triggered_[i],
@@ -160,30 +147,6 @@ void DuoStringEngine::Render(
         destination,
         size);
     newly_triggered_[i] = false;
-    if (stereo) {
-      // Pan the string, and clear the buffer for the next one.
-      const float l = string_pan[i][0];
-      const float r = string_pan[i][1];
-      if (i == 0) {
-        for (size_t j = 0; j < size; ++j) {
-          const float s = string_buffer_[j];
-          string_buffer_[j] = 0.0f;
-          out[j] = l * s;
-          aux[j] = r * s;
-        }
-      } else {
-        for (size_t j = 0; j < size; ++j) {
-          const float s = string_buffer_[j];
-          string_buffer_[j] = 0.0f;
-          out[j] += l * s;
-          aux[j] += r * s;
-        }
-      }
-    }
-  }
-  
-  if (stereo) {
-    quadrature_.Process(out, aux, size);
   }
 }
 

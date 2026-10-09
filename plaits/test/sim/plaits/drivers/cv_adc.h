@@ -22,24 +22,58 @@
 //
 // -----------------------------------------------------------------------------
 //
-// Quadrature stereo coefficients.
+// Simulator version of plaits/drivers/cv_adc.h.
 
-#include "plaits/dsp/duo/quadrature_stereo.h"
+#ifndef PLAITS_DRIVERS_CV_ADC_H_
+#define PLAITS_DRIVERS_CV_ADC_H_
+
+#include "stmlib/stmlib.h"
+
+#include "plaits/test/sim/sim_hardware.h"
 
 namespace plaits {
 
-// Squares of the coefficients published by Olli Niemitalo. At 48kHz, the
-// phase difference between the two paths stays within 1.5 degrees of 90
-// degrees between 20Hz and 22kHz.
-
-/* static */
-const float QuadratureStereo::left_coefficients_[kQuadratureNumSections] = {
-  0.479400866f, 0.876218494f, 0.976597590f, 0.997499256f
+enum CvAdcChannel {
+  CV_ADC_CHANNEL_MODEL,
+  CV_ADC_CHANNEL_V_OCT,
+  CV_ADC_CHANNEL_FM,
+  CV_ADC_CHANNEL_HARMONICS,
+  CV_ADC_CHANNEL_TIMBRE,
+  CV_ADC_CHANNEL_MORPH,
+  CV_ADC_CHANNEL_TRIGGER,
+  CV_ADC_CHANNEL_LEVEL,
+  CV_ADC_CHANNEL_LAST
 };
 
-/* static */
-const float QuadratureStereo::right_coefficients_[kQuadratureNumSections] = {
-  0.161758498f, 0.733028932f, 0.945349700f, 0.990599157f
+class CvAdc {
+ public:
+  CvAdc() { }
+  ~CvAdc() { }
+  
+  void Init() { Convert(); }
+  void DeInit() { }
+  
+  // As on the module, the values read are those of the previous conversion.
+  void Convert() {
+    for (int i = 0; i < CV_ADC_CHANNEL_LAST; ++i) {
+      values_[i] = sim::CvAdcValue(i);
+    }
+  }
+
+  inline int16_t value(CvAdcChannel channel) const {
+    return values_[channel];
+  }
+  
+  inline float float_value(CvAdcChannel channel) const {
+    return static_cast<float>(value(channel)) / 32768.0f;
+  }
+  
+ private:
+  int16_t values_[CV_ADC_CHANNEL_LAST];
+  
+  DISALLOW_COPY_AND_ASSIGN(CvAdc);
 };
 
 }  // namespace plaits
+
+#endif  // PLAITS_DRIVERS_CV_ADC_H_

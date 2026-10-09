@@ -42,6 +42,7 @@ void VirtualAnalogEngine::Init(BufferAllocator* allocator) {
   auxiliary_.Init();
   sync_.Init();
   variable_saw_.Init();
+  stereo_saw_.Init();
   
   auxiliary_amount_ = 0.0f;
   xmod_amount_ = 0.0f;
@@ -174,22 +175,25 @@ void VirtualAnalogEngine::Render(
   const float auxiliary_detune = ComputeDetuning(parameters.harmonics);
   const float primary_f = NoteToFrequency(parameters.note);
   const float auxiliary_f = NoteToFrequency(parameters.note + auxiliary_detune);
-  const float primary_sync_f = NoteToFrequency(
-      parameters.note + sync_amount * 48.0f);
-  const float auxiliary_sync_f = NoteToFrequency(
-      parameters.note + auxiliary_detune + sync_amount * 48.0f);
+  // AUX is not rendered in duo mode.
+  if (aux) {
+    const float primary_sync_f = NoteToFrequency(
+        parameters.note + sync_amount * 48.0f);
+    const float auxiliary_sync_f = NoteToFrequency(
+        parameters.note + auxiliary_detune + sync_amount * 48.0f);
 
-  float shape = parameters.morph * 1.5f;
-  CONSTRAIN(shape, 0.0f, 1.0f);
+    float shape = parameters.morph * 1.5f;
+    CONSTRAIN(shape, 0.0f, 1.0f);
 
-  float pw = 0.5f + (parameters.morph - 0.66f) * 1.46f;
-  CONSTRAIN(pw, 0.5f, 0.995f);
+    float pw = 0.5f + (parameters.morph - 0.66f) * 1.46f;
+    CONSTRAIN(pw, 0.5f, 0.995f);
   
-  // Render monster sync to AUX.
-  primary_.Render<true>(primary_f, primary_sync_f, pw, shape, out, size);
-  auxiliary_.Render<true>(auxiliary_f, auxiliary_sync_f, pw, shape, aux, size);
-  for (size_t i = 0; i < size; ++i) {
-    aux[i] = (aux[i] - out[i]) * 0.5f;
+    // Render monster sync to AUX.
+    primary_.Render<true>(primary_f, primary_sync_f, pw, shape, out, size);
+    auxiliary_.Render<true>(auxiliary_f, auxiliary_sync_f, pw, shape, aux, size);
+    for (size_t i = 0; i < size; ++i) {
+      aux[i] = (aux[i] - out[i]) * 0.5f;
+    }
   }
   
   // Render double varishape to OUT.
@@ -240,6 +244,67 @@ void VirtualAnalogEngine::Render(
 
 #endif  // VA_VARIANT values
 
+}
+
+void VirtualAnalogEngine::RenderStereo(
+    const EngineParameters& parameters,
+    float saw_ratio,
+    float* left,
+    float* right,
+    size_t size) {
+  // Same as the OUT part of Render (VA_VARIANT 2).
+  const float auxiliary_detune = ComputeDetuning(parameters.harmonics);
+  const float primary_f = NoteToFrequency(parameters.note);
+  const float auxiliary_f = NoteToFrequency(parameters.note + auxiliary_detune);
+  
+  float square_pw = 1.3f * parameters.timbre - 0.15f;
+  CONSTRAIN(square_pw, 0.005f, 0.5f);
+  
+  const float square_sync_ratio = parameters.timbre < 0.5f
+      ? 0.0f
+      : (parameters.timbre - 0.5f) * (parameters.timbre - 0.5f) * 4.0f * 48.0f;
+  
+  const float square_gain = min(parameters.timbre * 8.0f, 1.0f);
+  
+  float saw_pw = parameters.morph < 0.5f
+      ? parameters.morph + 0.5f
+      : 1.0f - (parameters.morph - 0.5f) * 2.0f;
+  saw_pw *= 1.1f;
+  CONSTRAIN(saw_pw, 0.005f, 1.0f);
+    
+  float saw_shape = 10.0f - 21.0f * parameters.morph;
+  CONSTRAIN(saw_shape, 0.0f, 1.0f);
+  
+  float saw_gain = 8.0f * (1.0f - parameters.morph);
+  CONSTRAIN(saw_gain, 0.02f, 1.0f);
+  
+  const float square_sync_f = NoteToFrequency(
+      parameters.note + square_sync_ratio);
+  
+  sync_.Render<true>(
+      primary_f, square_sync_f, square_pw, 1.0f, temp_buffer_, size);
+  stereo_saw_.Render(
+      auxiliary_f / saw_ratio, auxiliary_f * saw_ratio, saw_pw, saw_shape,
+      left, right, size);
+  
+  float norm = 1.0f / (std::max(square_gain, saw_gain));
+  
+  ParameterInterpolator square_gain_modulation(
+      &auxiliary_amount_,
+      square_gain * 0.3f * norm,
+      size);
+
+  ParameterInterpolator saw_gain_modulation(
+      &xmod_amount_,
+      saw_gain * 0.5f * norm,
+      size);
+  
+  for (size_t i = 0; i < size; ++i) {
+    const float saw_amount = saw_gain_modulation.Next();
+    const float square = square_gain_modulation.Next() * temp_buffer_[i];
+    left[i] = left[i] * saw_amount + square;
+    right[i] = right[i] * saw_amount + square;
+  }
 }
 
 }  // namespace plaits

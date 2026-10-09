@@ -1,0 +1,113 @@
+===
+after an update from the original firmware, the model and the V/OCT calibration are kept
+===
+export PLAITS_SIM_FLASH=flash_1.bin
+plaits-sim-v1.1 <<'SCRIPT' | grep -v saved
+wait 500ms
+gain_error v_oct 1.03
+press both
+wait 2.1s
+release both
+wait 500ms
+cv v_oct 1
+wait 300ms
+tap left
+wait 500ms
+cv v_oct 3
+wait 300ms
+tap left
+wait 500ms
+tap left
+tap left
+state
+SCRIPT
+printf 'gain_error v_oct 1.03\nstate\n' > module.txt
+plaits-sim < module.txt | grep -v saved
+echo "gain_error v_oct 1.03" > module.txt
+echo "1V: $(./main_note plaits-sim module.txt 1)"
+echo "3V: $(./main_note plaits-sim module.txt 3)"
+---
+engine 2
+color_blind 0
+duo_mode 0
+engine 2
+duo_engine 0
+level calibration scale 0.000 offset 0.000
+color_blind 0
+1V: {{ n1 }}
+3V: {{ n3 }}
+---
+where
+* abs(n3 - n1 - 24) < 0.05
+
+===
+the duo mode settings (model, layout, LEVEL calibration) are kept when the module is powered off
+===
+export PLAITS_SIM_FLASH=flash_2.bin
+plaits-sim <<'SCRIPT' > /dev/null
+wait 500ms
+tap both
+wait 300ms
+gain_error level 1.03
+press both
+wait 2.1s
+release both
+wait 500ms
+cv level 1
+wait 300ms
+tap left
+wait 500ms
+cv level 3
+wait 300ms
+tap left
+wait 500ms
+tap left
+tap left
+tap left
+tap right
+SCRIPT
+plaits-sim <<'SCRIPT'
+wait 500ms
+leds
+state
+SCRIPT
+---
+leds ...R....
+duo_mode 1
+engine 0
+duo_engine 11
+saved duo_mode 1 engine 0 duo_engine 11
+level calibration scale -58.250 offset 47.571
+color_blind 0
+
+===
+going back to the original firmware: it starts with the model it had, and ignores the duo mode settings, which are still there when updating again
+===
+export PLAITS_SIM_FLASH=flash_3.bin
+plaits-sim <<'SCRIPT' | grep saved
+wait 500ms
+tap left
+tap left
+tap both
+wait 300ms
+tap left
+tap left
+tap left
+state
+SCRIPT
+plaits-sim-v1.1 <<'SCRIPT'
+wait 500ms
+leds
+state
+SCRIPT
+plaits-sim <<'SCRIPT' | grep saved
+wait 500ms
+state
+SCRIPT
+---
+saved duo_mode 1 engine 2 duo_engine 3
+leds ..G.....
+engine 2
+saved engine 2
+color_blind 0
+saved duo_mode 1 engine 2 duo_engine 3

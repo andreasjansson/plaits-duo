@@ -28,10 +28,12 @@
 // does not depend on pitch (spectral envelopes, word banks, string pools...).
 //
 // Output conventions:
-// - stereo == true: out and aux receive the left and right channels of the
-//   mix of all rendered voices.
 // - stereo == false: out receives voice 0 and aux receives voice 1. When
 //   only one voice is rendered, aux is left untouched.
+// - stereo == true: depends on the stereo layout of the engine. Unless the
+//   engine makes its own stereo signal, the DuoVoice then turns the mix of
+//   the voices into a stereo signal with one of the effects of
+//   plaits/dsp/duo/duo_stereo.h.
 //
 // Only the OUT signal of the original engine is synthesized: the AUX
 // variants of the original models are not used in duo mode, and the CPU
@@ -41,6 +43,7 @@
 #ifndef PLAITS_DSP_DUO_DUO_ENGINE_H_
 #define PLAITS_DSP_DUO_DUO_ENGINE_H_
 
+#include "plaits/dsp/duo/duo_stereo.h"
 #include "plaits/dsp/engine/engine.h"
 
 namespace plaits {
@@ -48,13 +51,16 @@ namespace plaits {
 const int kNumDuoVoices = 2;
 const int kNumDuoEngines = 8;
 
-// Equal-power gains for a source panned 1/3 of the way towards one side.
-const float kDuoPanNear = 0.8660254f;
-const float kDuoPanFar = 0.5f;
-
-// Equal-power gains for a source panned 60% of the way towards one side.
-const float kDuoWidePanNear = 0.9510565f;
-const float kDuoWidePanFar = 0.3090170f;
+enum DuoStereoLayout {
+  // The engine renders the left and right channels in out and aux.
+  DUO_STEREO_NATIVE,
+  // The engine is never asked to render in stereo: the voices are rendered
+  // as in the split layout, and mixed by the DuoVoice.
+  DUO_STEREO_VOICES,
+  // The engine renders the mix of the voices in out (and may use aux as a
+  // scratch buffer), more efficiently than by rendering each voice.
+  DUO_STEREO_MIX
+};
 
 class DuoEngine {
  public:
@@ -72,16 +78,23 @@ class DuoEngine {
       bool* already_enveloped) = 0;
 
   PostProcessingSettings post_processing_settings;
+  DuoStereoLayout stereo_layout;
+  DuoStereoEffect stereo_effect;
 
   // In duo mode, out_gain is used for the split layout, and aux_gain for the
-  // stereo layout (see DuoVoice::Init).
+  // stereo layout (see DuoVoice::Init). The effect is not used with the
+  // native layout.
   void set_post_processing_settings(
       bool already_enveloped,
       float split_gain,
-      float stereo_gain) {
+      float stereo_gain,
+      DuoStereoLayout layout,
+      DuoStereoEffect effect) {
     post_processing_settings.already_enveloped = already_enveloped;
     post_processing_settings.out_gain = split_gain;
     post_processing_settings.aux_gain = stereo_gain;
+    stereo_layout = layout;
+    stereo_effect = effect;
   }
 };
 

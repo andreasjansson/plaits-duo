@@ -1,0 +1,317 @@
+===
+pressing the two buttons together enters and leaves duo mode
+===
+plaits-sim <<'SCRIPT' | grep duo_mode
+wait 500ms
+state
+tap both
+state
+tap both
+state
+SCRIPT
+---
+duo_mode 0
+saved duo_mode 0 engine 0 duo_engine 0
+duo_mode 1
+saved duo_mode 1 engine 0 duo_engine 0
+duo_mode 0
+saved duo_mode 0 engine 0 duo_engine 0
+
+===
+the two buttons do not have to be pressed or released at the same time
+===
+plaits-sim <<'SCRIPT' | grep -v saved
+wait 500ms
+press left
+wait 150ms
+press right
+wait 300ms
+release left
+wait 100ms
+release right
+wait 500ms
+echo left first, then right:
+state
+press right
+wait 150ms
+press left
+wait 300ms
+release right
+wait 100ms
+release left
+wait 500ms
+echo right first, then left:
+state
+SCRIPT
+---
+left first, then right:
+duo_mode 1
+engine 0
+duo_engine 0
+level calibration scale 0.000 offset 0.000
+color_blind 0
+right first, then left:
+duo_mode 0
+engine 0
+duo_engine 0
+level calibration scale 0.000 offset 0.000
+color_blind 0
+
+===
+entering duo mode: two LEDs move from the center to the edges
+===
+plaits-sim <<'SCRIPT'
+wait 500ms
+press both
+wait 100ms
+release both
+trace all 600ms
+SCRIPT
+---
+     0ms G.......
+     7ms ...YY...
+    87ms ..Y..Y..
+   168ms .Y....Y.
+   248ms Y......Y
+   328ms G.......
+
+===
+leaving duo mode: two LEDs move from the edges to the center
+===
+plaits-sim <<'SCRIPT'
+wait 500ms
+tap both
+wait 500ms
+press both
+wait 100ms
+release both
+trace all 600ms
+SCRIPT
+---
+     0ms G.......
+     7ms Y......Y
+    87ms .Y....Y.
+   167ms ..Y..Y..
+   248ms ...YY...
+   328ms G.......
+
+===
+in duo mode, the LED of the model goes off twice briefly every 2 seconds
+===
+plaits-sim <<'SCRIPT'
+wait 500ms
+tap both
+wait 500ms
+trace 0 4.5s
+SCRIPT
+---
+     0ms G
+   853ms .
+   913ms G
+  1033ms .
+  1094ms G
+  2906ms .
+  2967ms G
+  3087ms .
+  3147ms G
+
+===
+the left button cycles through the duo models in stereo (green), the right one in split mode (red)
+===
+plaits-sim <<'SCRIPT'
+wait 500ms
+tap both
+wait 300ms
+leds
+tap left
+leds
+tap left
+leds
+tap left
+leds
+tap left
+leds
+tap left
+leds
+tap left
+leds
+tap left
+leds
+tap left
+leds
+tap right
+leds
+tap right
+leds
+tap right
+leds
+tap right
+leds
+tap right
+leds
+tap right
+leds
+tap right
+leds
+tap right
+leds
+tap right
+leds
+tap left
+leds
+SCRIPT
+---
+leds G.......
+leds .G......
+leds ..G.....
+leds ...G....
+leds ....G...
+leds .....G..
+leds ......G.
+leds .......G
+leds G.......
+leds R.......
+leds .R......
+leds ..R.....
+leds ...R....
+leds ....R...
+leds .....R..
+leds ......R.
+leds .......R
+leds R.......
+leds G.......
+
+===
+the original firmware and duo mode each remember their selected model
+===
+plaits-sim <<'SCRIPT'
+wait 500ms
+tap left
+tap left
+tap right
+echo original:
+leds
+tap both
+wait 300ms
+echo duo:
+leds
+tap left
+tap left
+tap left
+tap left
+tap left
+leds
+tap both
+wait 300ms
+echo original:
+leds
+tap both
+wait 300ms
+echo duo:
+leds
+state
+SCRIPT
+---
+original:
+leds ..R.....
+duo:
+leds G.......
+leds .....G..
+original:
+leds ..R.....
+duo:
+leds .....G..
+duo_mode 1
+engine 10
+duo_engine 5
+saved duo_mode 1 engine 10 duo_engine 5
+level calibration scale 0.000 offset 0.000
+color_blind 0
+
+===
+in duo mode, holding the left button still shows the low-pass gate settings
+===
+plaits-sim <<'SCRIPT'
+wait 500ms
+tap both
+wait 300ms
+press left
+wait 2.1s
+leds
+knob timbre 0.9
+knob morph 0.1
+wait 200ms
+leds
+release left
+wait 100ms
+leds
+SCRIPT
+---
+leds ......YY
+leds YYYY...Y
+leds G.......
+
+===
+in duo mode, holding the right button still shows the octave range
+===
+plaits-sim <<'SCRIPT'
+wait 500ms
+tap both
+wait 300ms
+press right
+wait 2.1s
+leds
+knob harmonics 0.35
+wait 200ms
+leds
+release right
+wait 100ms
+leds
+SCRIPT
+---
+leds YYYYYYYY
+leds .....Y..
+leds G.......
+
+===
+the MODEL CV is added to the selected model, with the same volts per model as in the original firmware
+===
+# The LED of the active model is lit, the one of the selected model blinks
+# (leds 512ms: over a whole blink). Above 2.5V, the original firmware goes on
+# to the red models, duo mode stays on its last model.
+cat > model_cv.txt <<'SCRIPT'
+cv model 0.33
+wait 300ms
+leds 512ms
+cv model 1
+wait 300ms
+leds 512ms
+cv model 2.33
+wait 300ms
+leds 512ms
+cv model 2.67
+wait 300ms
+leds 512ms
+SCRIPT
+echo original:
+{ echo "wait 500ms"; cat model_cv.txt; } | plaits-sim-v1.1
+echo duo:
+{ echo "wait 500ms"; echo "tap both"; cat model_cv.txt; } | plaits-sim
+echo duo, split:
+{ echo "wait 500ms"; echo "tap both"; echo "tap right"; cat model_cv.txt; } | plaits-sim
+---
+original:
+leds GG......
+leds G..G....
+leds G......G
+leds R.......
+duo:
+leds GG......
+leds G..G....
+leds G......G
+leds G......G
+duo, split:
+leds RR......
+leds R..R....
+leds R......R
+leds R......R

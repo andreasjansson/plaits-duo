@@ -49,13 +49,15 @@
 
 #include "plaits/dsp/duo/duo_additive_engine.h"
 #include "plaits/dsp/duo/duo_engine.h"
-#include "plaits/dsp/duo/duo_fm_engine.h"
-#include "plaits/dsp/duo/duo_grain_engine.h"
+#include "plaits/dsp/duo/duo_original_engine.h"
 #include "plaits/dsp/duo/duo_speech_engine.h"
+#include "plaits/dsp/duo/duo_stereo.h"
 #include "plaits/dsp/duo/duo_string_engine.h"
 #include "plaits/dsp/duo/duo_virtual_analog_engine.h"
 #include "plaits/dsp/duo/duo_waveshaping_engine.h"
 #include "plaits/dsp/duo/duo_wavetable_engine.h"
+#include "plaits/dsp/engine/fm_engine.h"
+#include "plaits/dsp/engine/grain_engine.h"
 #include "plaits/dsp/voice.h"
 
 namespace plaits {
@@ -106,8 +108,8 @@ class DuoVoice {
 
   DuoVirtualAnalogEngine virtual_analog_engine_;
   DuoWaveshapingEngine waveshaping_engine_;
-  DuoFMEngine fm_engine_;
-  DuoGrainEngine grain_engine_;
+  DuoOriginalEngine<FMEngine> fm_engine_;
+  DuoOriginalEngine<GrainEngine> grain_engine_;
   DuoAdditiveEngine additive_engine_;
   DuoWavetableEngine wavetable_engine_;
   DuoStringEngine string_engine_;
@@ -131,6 +133,7 @@ class DuoVoice {
 
   ChannelPostProcessor out_post_processor_;
   ChannelPostProcessor aux_post_processor_;
+  DuoStereo stereo_;
 
   float out_buffer_[kMaxBlockSize];
   float aux_buffer_[kMaxBlockSize];

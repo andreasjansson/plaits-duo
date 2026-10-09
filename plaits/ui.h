@@ -91,7 +91,10 @@ class Ui {
   void SaveState();
   void DetectNormalization();
   
-  void StartCalibration();
+  void Navigate(int button);
+  void ToggleDuoMode();
+
+  void StartCalibration(bool level);
   void CalibrateC1();
   void CalibrateC3();
 
@@ -118,6 +121,14 @@ class Ui {
   PotController pots_[POTS_ADC_CHANNEL_LAST];
   float pitch_lp_;
   float pitch_lp_calibration_;
+  
+  // LEVEL used as a pitch input in duo mode.
+  float level_pitch_lp_;
+  float level_pitch_lp_calibration_;
+  bool calibrating_level_;
+  
+  // LED animation played when entering or leaving duo mode.
+  int duo_animation_;
   
   Settings* settings_;
   

@@ -29,10 +29,13 @@
 // shared by the two voices (each voice still applies its own anti-aliasing
 // attenuation of the upper harmonics).
 //
-// Stereo: spectral panning. The fundamental stays in the center, and the
-// other harmonics are dealt in pairs to the two sides (2 | 3 4 | 5 6 | 7 8...
-// so that each side gets both odd and even harmonics), with some crossfeed.
-// The pattern is mirrored for the second voice.
+// Stereo: each harmonic has its own phase difference between the two
+// channels, which changes slowly. The fundamental is the same in both
+// channels, the second and third harmonics swing a little around zero, and
+// the phase difference of the higher harmonics rotates (as if the harmonic
+// was detuned by a fraction of a Hz in one channel). Neighbouring harmonics
+// turn in opposite directions, so that their pulls towards one side or the
+// other cancel out. Every harmonic has the same level in both channels.
 
 #ifndef PLAITS_DSP_DUO_DUO_ADDITIVE_ENGINE_H_
 #define PLAITS_DSP_DUO_DUO_ADDITIVE_ENGINE_H_
@@ -59,6 +62,7 @@ class DuoAdditiveEngine : public DuoEngine {
       bool* already_enveloped);
 
  private:
+  void UpdateRotations();
   void UpdateAmplitudes(
       float centroid,
       float slope,
@@ -69,7 +73,14 @@ class DuoAdditiveEngine : public DuoEngine {
   DuoHarmonicBank bank_[kNumDuoVoices];
 
   float amplitudes_[kDuoNumHarmonics];
-  float* temp_buffer_[2];
+
+  // Stereo: phase of the LFO of each harmonic (in cycles), and the cosine
+  // and sine of half the phase difference between the channels (scaled, see
+  // DuoHarmonicBank::RenderStereo).
+  float rotation_phase_[kNumDuoVoices][kDuoNumHarmonics];
+  float rotation_cos_[kNumDuoVoices][kDuoNumHarmonics];
+  float rotation_sin_[kNumDuoVoices][kDuoNumHarmonics];
+  int rotation_counter_;
 
   DISALLOW_COPY_AND_ASSIGN(DuoAdditiveEngine);
 };

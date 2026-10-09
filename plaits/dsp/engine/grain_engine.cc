@@ -36,12 +36,12 @@ using namespace std;
 using namespace stmlib;
 
 void GrainEngine::Init(BufferAllocator* allocator) {
-  grainlet_[0].Init();
-  grainlet_[1].Init();
+  grainlet_.Init();
   // vosim_oscillator_.Init();
   z_oscillator_.Init();
   dc_blocker_[0].Init();
   dc_blocker_[1].Init();
+  temp_buffer_ = allocator->Allocate<float>(kMaxBlockSize);
 }
 
 void GrainEngine::Reset() {
@@ -66,11 +66,20 @@ void GrainEngine::Render(
   const float carrier_shape = 0.33f + (parameters.morph - 0.33f) * \
       max(1.0f - f0 * 24.0f, 0.0f);
   
-  grainlet_[0].Render(f0, f1, carrier_shape, carrier_bleed_fixed, out, size);
-  grainlet_[1].Render(f0, f1 * ratio, carrier_shape, carrier_bleed_fixed, aux, size);
+  // The second formant is rendered in AUX, which is then overwritten (or in
+  // a scratch buffer when AUX is not rendered, in duo mode).
+  float* formant_2 = aux ? aux : temp_buffer_;
+  grainlet_.Render(
+      f0, f1, f1 * ratio, carrier_shape, carrier_bleed_fixed,
+      out, formant_2, size);
   dc_blocker_[0].set_f<FREQUENCY_DIRTY>(0.3f * f0);
   for (size_t i = 0; i < size; ++i) {
-    out[i] = dc_blocker_[0].Process<FILTER_MODE_HIGH_PASS>(out[i] + aux[i]);
+    out[i] = dc_blocker_[0].Process<FILTER_MODE_HIGH_PASS>(
+        out[i] + formant_2[i]);
+  }
+  
+  if (!aux) {
+    return;
   }
 
   const float cutoff = NoteToFrequency(root + 96.0f * parameters.timbre);

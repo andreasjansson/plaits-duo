@@ -36,6 +36,12 @@ namespace plaits {
 
 using namespace std;
 
+// The sizes of the stored structures must not change, otherwise the settings
+// and calibration data saved by the original firmware would be lost.
+typedef char check_persistent_data_size[
+    sizeof(PersistentData) == 112 ? 1 : -1];
+typedef char check_state_size[sizeof(State) == 8 ? 1 : -1];
+
 bool Settings::Init() {
   ChannelCalibrationData* c = persistent_data_.channel_calibration_data;
   c[CV_ADC_CHANNEL_MODEL].offset = 0.025f;
@@ -70,15 +76,22 @@ bool Settings::Init() {
   c[CV_ADC_CHANNEL_LEVEL].scale = -0.6f;
   c[CV_ADC_CHANNEL_LEVEL].normalization_detection_threshold = 21403;
   
+  persistent_data_.level_note_scale = 0.0f;
+  persistent_data_.level_note_offset = 0.0f;
+  
   state_.engine = 0;
   state_.lpg_colour = 0;
   state_.decay = 128;
   state_.octave = 255;
   state_.color_blind = 0;
+  state_.duo_mode = 0;
+  state_.duo_engine = 0;
   
   bool success = chunk_storage_.Init(&persistent_data_, &state_);
   
   CONSTRAIN(state_.engine, 0, 15);
+  CONSTRAIN(state_.duo_mode, 0, 1);
+  CONSTRAIN(state_.duo_engine, 0, 15);
 
   return success;
 }

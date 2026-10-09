@@ -1,0 +1,11 @@
+#!/bin/sh
+# Usage: memory_use FIRMWARE.elf - prints the free flash memory (the 224kB
+# after the bootloader, minus the code, the constants and the initial values
+# of the variables) and the RAM left for the stack (the 32kB minus the
+# variables).
+size="${TOOLCHAIN_PATH}bin/arm-none-eabi-size"
+nm="${TOOLCHAIN_PATH}bin/arm-none-eabi-nm"
+used=$("$size" -A "$1" | awk '/^\.isr_vector|^\.text|^\.data/ { s += $2 } END { print s }')
+end_of_variables=$("$nm" "$1" | awk '/ _ebss$/ { print $1 }')
+echo "flash: $((224 * 1024 - used)) bytes free"
+echo "stack: $((0x20008000 - 0x$end_of_variables)) bytes"

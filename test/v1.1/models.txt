@@ -1,0 +1,159 @@
+===
+green 1: pair of classic waveforms
+===
+{ ./taps left 0; cat workout.txt; } | plaits-sim -o new.wav
+{ ./taps left 0; cat workout.txt; } | plaits-sim-v1.1 -o reference.wav
+plaits-analyze diff new.wav reference.wav
+---
+main: max_diff=0
+aux: max_diff=0
+
+===
+green 2: waveshaping oscillator
+===
+{ ./taps left 1; cat workout.txt; } | plaits-sim -o new.wav
+{ ./taps left 1; cat workout.txt; } | plaits-sim-v1.1 -o reference.wav
+plaits-analyze diff new.wav reference.wav
+---
+main: max_diff=0
+aux: max_diff=0
+
+===
+green 3: two operator FM
+===
+{ ./taps left 2; cat workout.txt; } | plaits-sim -o new.wav
+{ ./taps left 2; cat workout.txt; } | plaits-sim-v1.1 -o reference.wav
+plaits-analyze diff new.wav reference.wav
+---
+main: max_diff=0
+aux: max_diff=0
+
+===
+green 4: granular formant oscillator
+===
+{ ./taps left 3; cat workout.txt; } | plaits-sim -o new.wav
+{ ./taps left 3; cat workout.txt; } | plaits-sim-v1.1 -o reference.wav
+plaits-analyze diff new.wav reference.wav
+---
+main: max_diff=0
+aux: max_diff=0
+
+===
+green 5: harmonic oscillator
+===
+{ ./taps left 4; cat workout.txt; } | plaits-sim -o new.wav
+{ ./taps left 4; cat workout.txt; } | plaits-sim-v1.1 -o reference.wav
+plaits-analyze diff new.wav reference.wav
+---
+main: max_diff=0
+aux: max_diff=0
+
+===
+green 6: wavetable oscillator
+===
+{ ./taps left 5; cat workout.txt; } | plaits-sim -o new.wav
+{ ./taps left 5; cat workout.txt; } | plaits-sim-v1.1 -o reference.wav
+plaits-analyze diff new.wav reference.wav
+---
+main: max_diff=0
+aux: max_diff=0
+
+===
+green 7: chords
+===
+{ ./taps left 6; cat workout.txt; } | plaits-sim -o new.wav
+{ ./taps left 6; cat workout.txt; } | plaits-sim-v1.1 -o reference.wav
+plaits-analyze diff new.wav reference.wav
+---
+main: max_diff=0
+aux: max_diff=0
+
+===
+green 8: vowel and speech synthesis
+===
+{ ./taps left 7; cat workout.txt; } | plaits-sim -o new.wav
+{ ./taps left 7; cat workout.txt; } | plaits-sim-v1.1 -o reference.wav
+plaits-analyze diff new.wav reference.wav
+---
+main: max_diff=0
+aux: max_diff=0
+
+===
+red 1: granular cloud
+===
+{ ./taps right 1; cat workout.txt; } | plaits-sim -o new.wav
+{ ./taps right 1; cat workout.txt; } | plaits-sim-v1.1 -o reference.wav
+plaits-analyze diff new.wav reference.wav
+---
+main: max_diff=0
+aux: max_diff=0
+
+===
+red 2: filtered noise
+===
+{ ./taps right 2; cat workout.txt; } | plaits-sim -o new.wav
+{ ./taps right 2; cat workout.txt; } | plaits-sim-v1.1 -o reference.wav
+plaits-analyze diff new.wav reference.wav
+---
+main: max_diff=0
+aux: max_diff=0
+
+===
+red 3: particle noise
+===
+{ ./taps right 3; cat workout.txt; } | plaits-sim -o new.wav
+{ ./taps right 3; cat workout.txt; } | plaits-sim-v1.1 -o reference.wav
+plaits-analyze diff new.wav reference.wav
+---
+main: max_diff=0
+aux: max_diff=0
+
+===
+red 4: inharmonic string modeling
+===
+{ ./taps right 4; cat workout.txt; } | plaits-sim -o new.wav
+{ ./taps right 4; cat workout.txt; } | plaits-sim-v1.1 -o reference.wav
+plaits-analyze diff new.wav reference.wav
+---
+main: max_diff=0
+aux: max_diff=0
+
+===
+red 5: modal resonator
+===
+{ ./taps right 5; cat workout.txt; } | plaits-sim -o new.wav
+{ ./taps right 5; cat workout.txt; } | plaits-sim-v1.1 -o reference.wav
+plaits-analyze diff new.wav reference.wav
+---
+main: max_diff=0
+aux: max_diff=0
+
+===
+red 6: analog bass drum
+===
+{ ./taps right 6; cat workout.txt; } | plaits-sim -o new.wav
+{ ./taps right 6; cat workout.txt; } | plaits-sim-v1.1 -o reference.wav
+plaits-analyze diff new.wav reference.wav
+---
+main: max_diff=0
+aux: max_diff=0
+
+===
+red 7: analog snare drum
+===
+{ ./taps right 7; cat workout.txt; } | plaits-sim -o new.wav
+{ ./taps right 7; cat workout.txt; } | plaits-sim-v1.1 -o reference.wav
+plaits-analyze diff new.wav reference.wav
+---
+main: max_diff=0
+aux: max_diff=0
+
+===
+red 8: analog hi-hat
+===
+{ ./taps right 8; cat workout.txt; } | plaits-sim -o new.wav
+{ ./taps right 8; cat workout.txt; } | plaits-sim-v1.1 -o reference.wav
+plaits-analyze diff new.wav reference.wav
+---
+main: max_diff=0
+aux: max_diff=0

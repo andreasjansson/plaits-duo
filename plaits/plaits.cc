@@ -29,7 +29,7 @@
 #include "plaits/drivers/debug_port.h"
 
 #include "plaits/dsp/dsp.h"
-#include "plaits/dsp/voice.h"
+#include "plaits/dsp/synthesizer.h"
 #include "plaits/settings.h"
 #include "plaits/ui.h"
 
@@ -46,7 +46,7 @@ Modulations modulations;
 Patch patch;
 Settings settings;
 Ui ui;
-Voice voice;
+Synthesizer synthesizer;
 
 char shared_buffer[16384];
 uint32_t test_ramp;
@@ -94,8 +94,8 @@ void FillBuffer(AudioDac::Frame* output, size_t size) {
       ++output;
     }
   } else {
-    voice.Render(patch, modulations, (Voice::Frame*)(output), size);
-    ui.set_active_engine(voice.active_engine());
+    synthesizer.Render(patch, modulations, (Voice::Frame*)(output), size);
+    ui.set_active_engine(synthesizer.active_engine(patch));
   }
   
   if (debug_port.readable()) {
@@ -115,7 +115,7 @@ void Init() {
   IWDG_SetPrescaler(IWDG_Prescaler_16);
   
   BufferAllocator allocator(shared_buffer, 16384);
-  voice.Init(&allocator);
+  synthesizer.Init(&allocator);
   
   volatile size_t counter = 1000000;
   while (counter--);

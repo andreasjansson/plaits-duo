@@ -29,8 +29,8 @@
 // the carrier waveform is computed only once. The outputs are bit-identical
 // to those of two GrainletOscillators.
 
-#ifndef PLAITS_DSP_DUO_DUAL_GRAINLET_OSCILLATOR_H_
-#define PLAITS_DSP_DUO_DUAL_GRAINLET_OSCILLATOR_H_
+#ifndef PLAITS_DSP_OSCILLATOR_DUAL_GRAINLET_OSCILLATOR_H_
+#define PLAITS_DSP_OSCILLATOR_DUAL_GRAINLET_OSCILLATOR_H_
 
 #include "stmlib/dsp/dsp.h"
 #include "stmlib/dsp/parameter_interpolator.h"
@@ -227,4 +227,4 @@ class DualGrainletOscillator {
 
 }  // namespace plaits
 
-#endif  // PLAITS_DSP_DUO_DUAL_GRAINLET_OSCILLATOR_H_
+#endif  // PLAITS_DSP_OSCILLATOR_DUAL_GRAINLET_OSCILLATOR_H_

@@ -1,4 +1,3 @@
-// Copyright 2016 Emilie Gillet.
 // Copyright 2026 Andreas Jansson.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,55 +21,39 @@
 // See http://creativecommons.org/licenses/MIT/ for more information.
 //
 // -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 //
-// Duo version of the 2-operator FM oscillator.
-//
-// Stereo: quadrature (see quadrature_stereo.h). Every partial of the FM
-// spectrum appears in both channels with the same amplitude and with a phase
-// difference of 90 degrees, so the magnitude spectra of the two channels and
-// of their sum are the same as the original OUT. (Computing the rotated
-// carrier directly in the 4x oversampled loop was tried, and was 4 times as
-// expensive as rotating the downsampled mix.)
+// Duo version of the models of the original firmware whose two voices have
+// nothing to share (classic waveforms, waveshaper, 2-op FM and formant): two
+// instances of the original engine, rendering OUT only (the engines skip AUX
+// when it is NULL).
 
-#ifndef PLAITS_DSP_DUO_DUO_FM_ENGINE_H_
-#define PLAITS_DSP_DUO_DUO_FM_ENGINE_H_
+#ifndef PLAITS_DSP_DUO_DUO_ORIGINAL_ENGINE_H_
+#define PLAITS_DSP_DUO_DUO_ORIGINAL_ENGINE_H_
 
 #include "plaits/dsp/duo/duo_engine.h"
-#include "plaits/dsp/duo/quadrature_stereo.h"
 
 namespace plaits {
 
-class DuoFMVoice {
+template<typename Engine>
+class DuoOriginalEngine : public DuoEngine {
  public:
-  DuoFMVoice() { }
-  ~DuoFMVoice() { }
+  DuoOriginalEngine() { }
+  ~DuoOriginalEngine() { }
 
-  void Init();
+  virtual void Init(stmlib::BufferAllocator* allocator) {
+    for (int i = 0; i < kNumDuoVoices; ++i) {
+      voice_[i].Init(allocator);
+    }
+  }
 
-  void Render(const EngineParameters& parameters, float* out, size_t size);
+  virtual void Reset() {
+    for (int i = 0; i < kNumDuoVoices; ++i) {
+      voice_[i].Reset();
+    }
+  }
 
- private:
-  uint32_t carrier_phase_;
-  uint32_t modulator_phase_;
-
-  float previous_carrier_frequency_;
-  float previous_modulator_frequency_;
-  float previous_amount_;
-  float previous_feedback_;
-  float previous_sample_;
-
-  float carrier_fir_;
-
-  DISALLOW_COPY_AND_ASSIGN(DuoFMVoice);
-};
-
-class DuoFMEngine : public DuoEngine {
- public:
-  DuoFMEngine() { }
-  ~DuoFMEngine() { }
-
-  virtual void Init(stmlib::BufferAllocator* allocator);
-  virtual void Reset();
+  // Rendered as in the split layout (see DUO_STEREO_VOICES).
   virtual void Render(
       const EngineParameters* parameters,
       int num_voices,
@@ -78,15 +61,19 @@ class DuoFMEngine : public DuoEngine {
       float* out,
       float* aux,
       size_t size,
-      bool* already_enveloped);
+      bool* already_enveloped) {
+    for (int i = 0; i < num_voices; ++i) {
+      voice_[i].Render(
+          parameters[i], i == 0 ? out : aux, NULL, size, already_enveloped);
+    }
+  }
 
- private:
-  DuoFMVoice voice_[kNumDuoVoices];
-  QuadratureStereo quadrature_;
+ protected:
+  Engine voice_[kNumDuoVoices];
 
-  DISALLOW_COPY_AND_ASSIGN(DuoFMEngine);
+  DISALLOW_COPY_AND_ASSIGN(DuoOriginalEngine);
 };
 
 }  // namespace plaits
 
-#endif  // PLAITS_DSP_DUO_DUO_FM_ENGINE_H_
+#endif  // PLAITS_DSP_DUO_DUO_ORIGINAL_ENGINE_H_

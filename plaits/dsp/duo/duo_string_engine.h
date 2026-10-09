@@ -33,12 +33,6 @@
 // engine. With two voices, each voice has an active string and one of the
 // previous notes keeps ringing.
 //
-// Stereo: the three strings of the pool sit at different places in the
-// stereo field (left, right, center), so that successive notes move across
-// the field and their resonances overlap at different places, as on a harp.
-// The result then goes through the quadrature stage (see
-// quadrature_stereo.h), so that each string also has some width.
-//
 // The strings themselves are a faster implementation of the original string
 // model (see duo_string.h): the original engine already uses 70% of the CPU
 // with its three strings.
@@ -51,7 +45,6 @@
 
 #include "plaits/dsp/duo/duo_engine.h"
 #include "plaits/dsp/duo/duo_string.h"
-#include "plaits/dsp/duo/quadrature_stereo.h"
 #include "plaits/dsp/physical_modelling/delay_line.h"
 
 namespace plaits {
@@ -86,11 +79,8 @@ class DuoStringEngine : public DuoEngine {
   int active_string_[kNumDuoVoices];
   DelayLine<float, 16> f0_delay_[kNumDuoVoices];
   uint32_t num_triggers_;
-  
-  QuadratureStereo quadrature_;
 
   float* temp_buffer_;
-  float* string_buffer_;
 
   DISALLOW_COPY_AND_ASSIGN(DuoStringEngine);
 };

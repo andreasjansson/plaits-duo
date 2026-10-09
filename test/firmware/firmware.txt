@@ -1,0 +1,47 @@
+%skip(needs the ARM toolchain: set TOOLCHAIN_PATH) if: ! test -x "${TOOLCHAIN_PATH}bin/arm-none-eabi-gcc"
+
+===
+the firmware builds, fits in the flash memory (224kB after the bootloader), and leaves room for the stack in the RAM (32kB)
+===
+cd "$CCTR_TEST_PATH/../.."
+make -s -f plaits/makefile TOOLCHAIN_PATH="$TOOLCHAIN_PATH" > /dev/null 2>&1
+plaits/test/memory_use build/plaits/plaits.elf
+---
+flash: {{ flash }} bytes free
+stack: {{ stack }} bytes
+---
+where
+* flash > 0
+* stack > 4096
+
+===
+on the module's processor (emulated), every duo model uses less CPU than the most expensive model of the original firmware, which uses about as much as in v1.1, and the stack fits
+%skip(needs the unicorn, capstone and pyelftools Python modules) if: ! ${PYTHON:-python3} -c "import unicorn, capstone, elftools"
+===
+cd "$CCTR_TEST_PATH/../.."
+make -s -f plaits/test/bench.mk TOOLCHAIN_PATH="$TOOLCHAIN_PATH" PYTHON="${PYTHON:-python3}" 2> /dev/null | grep "at most"
+---
+duo mode: at most {{ duo }}% of the budget ({{ duo_details }})
+original firmware: at most {{ original }}% of the budget ({{ original_details }})
+stack: at most {{ stack }} bytes ({{ stack_details }})
+---
+where
+* duo < 100
+* original < 101
+* stack < 4096
+
+===
+the firmware update file (audio, made with make -f plaits/makefile wav) is decoded by the code of the audio bootloader into the firmware
+%skip(needs numpy) if: ! ${PYTHON:-python3} -c "import numpy"
+===
+cd "$CCTR_TEST_PATH/../.."
+make -s -f plaits/makefile TOOLCHAIN_PATH="$TOOLCHAIN_PATH" PYTHON="${PYTHON:-python3}" wav > /dev/null 2>&1
+plaits-update-decoder build/plaits/plaits.wav "$CCTR_WORK_DIR/received.bin"
+# The bootloader writes whole pages of 2kB: the firmware, then 0xff.
+size=$(wc -c < build/plaits/plaits.bin)
+padding=$(( (2048 - size % 2048) % 2048 ))
+{ cat build/plaits/plaits.bin; head -c $padding /dev/zero | tr '\0' '\377'; } > "$CCTR_WORK_DIR/expected.bin"
+cmp "$CCTR_WORK_DIR/expected.bin" "$CCTR_WORK_DIR/received.bin" && echo "the received firmware is the same"
+---
+{{ pages }} pages received
+the received firmware is the same

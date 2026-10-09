@@ -1,0 +1,18 @@
+#!/bin/sh
+# Usage: aux_note SETUP VOLTS - plays a saw in duo mode, split layout, with
+# V/OCT at 0V and LEVEL at VOLTS, after the plaits-sim commands in the file
+# SETUP, and prints the MIDI note of AUX (rounded to 0.01 semitone).
+{
+  echo "wait 500ms"
+  cat "$1"
+  echo "knob frequency 0.3"
+  echo "knob harmonics 0.5"
+  echo "knob timbre 0"
+  echo "knob morph 0.4"
+  echo "cv v_oct 0"
+  echo "cv level $2"
+  echo "wait 500ms"
+  echo "clear"
+  echo "wait 500ms"
+} | plaits-sim -o aux_note.wav
+plaits-analyze pitch aux_note.wav aux | sed -n 's/note: //p'

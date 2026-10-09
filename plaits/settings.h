@@ -45,9 +45,21 @@ struct ChannelCalibrationData {
   }
 };
 
+// The duo mode settings use bytes which were padding in the original
+// firmware (and which it saved as zeros), so that the sizes of these
+// structures do not change, and the settings and calibration data saved by
+// the original firmware are still valid.
+
 struct PersistentData {
   ChannelCalibrationData channel_calibration_data[CV_ADC_CHANNEL_LAST];
-  uint8_t padding[16];
+  
+  // Calibration of the LEVEL input when used as a pitch input in duo mode
+  // (note = raw ADC value * scale + offset). A scale of 0 means that the
+  // input has not been calibrated (see Ui::Poll).
+  float level_note_scale;
+  float level_note_offset;
+  
+  uint8_t padding[8];
   enum { tag = 0x494C4143 };  // CALI
 };
 
@@ -57,7 +69,9 @@ struct State {
   uint8_t decay;
   uint8_t octave;
   uint8_t color_blind;
-  uint8_t padding[3];
+  uint8_t duo_mode;
+  uint8_t duo_engine;
+  uint8_t padding[1];
   enum { tag = 0x54415453 };  // STAT
 };
 
@@ -81,6 +95,14 @@ class Settings {
 
   inline const State& state() const {
     return state_;
+  }
+  
+  inline const PersistentData& persistent_data() const {
+    return persistent_data_;
+  }
+  
+  inline PersistentData* mutable_persistent_data() {
+    return &persistent_data_;
   }
 
   inline State* mutable_state() {

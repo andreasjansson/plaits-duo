@@ -28,14 +28,12 @@
 // The rendering loop has been reorganized to run two voices in about the time
 // the original engine took for one (see the .cc file). The result is the
 // same as the original OUT within 1e-4.
-//
-// Stereo: quadrature (see quadrature_stereo.h).
+
 
 #ifndef PLAITS_DSP_DUO_DUO_WAVETABLE_ENGINE_H_
 #define PLAITS_DSP_DUO_DUO_WAVETABLE_ENGINE_H_
 
 #include "plaits/dsp/duo/duo_engine.h"
-#include "plaits/dsp/duo/quadrature_stereo.h"
 #include "plaits/dsp/oscillator/wavetable_oscillator.h"
 
 namespace plaits {
@@ -105,7 +103,6 @@ class DuoWavetableEngine : public DuoEngine {
   int cell_;
   const int16_t* wave_[8];
 
-  QuadratureStereo quadrature_;
 
   DISALLOW_COPY_AND_ASSIGN(DuoWavetableEngine);
 };

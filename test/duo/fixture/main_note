@@ -1,0 +1,18 @@
+#!/bin/sh
+# Usage: main_note FIRMWARE SETUP VOLTS - plays a saw on plaits-sim (FIRMWARE
+# is plaits-sim or plaits-sim-v1.1), with V/OCT at VOLTS, after the commands
+# in the file SETUP, and prints the MIDI note of MAIN (rounded to 0.01
+# semitone).
+{
+  echo "wait 500ms"
+  cat "$2"
+  echo "knob frequency 0.3"
+  echo "knob harmonics 0.5"
+  echo "knob timbre 0"
+  echo "knob morph 0.4"
+  echo "cv v_oct $3"
+  echo "wait 500ms"
+  echo "clear"
+  echo "wait 500ms"
+} | "$1" -o main_note.wav
+plaits-analyze pitch main_note.wav main | sed -n 's/note: //p'

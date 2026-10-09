@@ -33,6 +33,39 @@ namespace plaits {
 using namespace std;
 using namespace stmlib;
 
+// Not inlined: it is called twice by Voice::Render, and twice by
+// DuoVoice::Render.
+void ChannelPostProcessor::Process(
+    float gain,
+    bool bypass_lpg,
+    float low_pass_gate_gain,
+    float low_pass_gate_frequency,
+    float low_pass_gate_hf_bleed,
+    float* in,
+    short* out,
+    size_t size,
+    size_t stride) {
+  if (gain < 0.0f) {
+    limiter_.Process(-gain, in, size);
+  }
+  const float post_gain = (gain < 0.0f ? 1.0f : gain) * -32767.0f;
+  if (!bypass_lpg) {
+    lpg_.Process(
+        post_gain * low_pass_gate_gain,
+        low_pass_gate_frequency,
+        low_pass_gate_hf_bleed,
+        in,
+        out,
+        size,
+        stride);
+  } else {
+    while (size--) {
+      *out = stmlib::Clip16(1 + static_cast<int32_t>(*in++ * post_gain));
+      out += stride;
+    }
+  }
+}
+
 void Voice::Init(BufferAllocator* allocator) {
   engines_.Init();
   engines_.RegisterInstance(&virtual_analog_engine_, false, 0.8f, 0.8f);

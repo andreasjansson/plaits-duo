@@ -183,11 +183,9 @@ void DuoWavetableEngine::Init(BufferAllocator* allocator) {
   previous_z_ = 0.0f;
   
   UpdateWaves(0, 0, 0);
-  quadrature_.Init();
 }
 
 void DuoWavetableEngine::Reset() {
-  quadrature_.Init();
 }
 
 void DuoWavetableEngine::UpdateWaves(int x, int y, int z) {
@@ -298,11 +296,6 @@ void DuoWavetableEngine::Render(
   for (int i = 0; i < num_voices; ++i) {
     voice_[i].Render(
         NoteToFrequency(parameters[i].note), blend, i == 0 ? out : aux, size);
-  }
-  
-  if (stereo) {
-    quadrature_.ProcessVoices(
-        out, aux, num_voices, kDuoPanNear, kDuoPanFar, size);
   }
 }
 
