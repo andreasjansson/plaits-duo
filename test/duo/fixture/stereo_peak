@@ -1,0 +1,30 @@
+#!/bin/sh
+# Usage: stereo_peak MODEL - plays a duo model (0 to 7) in the stereo layout,
+# with one voice, then two, triggered notes and several settings of the
+# knobs, and prints the highest sample (1: full scale).
+for voices in 1 2; do
+  for knobs in "0.2 0.3 0.7" "0.5 0.5 0.5" "0.8 0.7 0.3" "0.05 0.9 0.9" \
+      "0.95 0.1 0.1" "0.18 0.1 0.6" "0.18 0.9 0.3"; do
+    set -- "$1" $knobs
+    {
+      echo "wait 500ms"
+      echo "tap both"
+      ./taps left "$1"
+      echo "knob harmonics $2"
+      echo "knob timbre $3"
+      echo "knob morph $4"
+      echo "cv trigger 0"
+      if [ "$voices" = 2 ]; then
+        echo "cv level 0.583"
+      fi
+      echo "wait 100ms"
+      echo "clear"
+      for v_oct in -1 0 0.25 1 -0.5 0.583 1.5 0; do
+        echo "cv v_oct $v_oct"
+        echo "trigger"
+        echo "wait 250ms"
+      done
+    } | plaits-sim -o stereo_peak.wav
+    plaits-analyze levels stereo_peak.wav | sed -n 's/.*peak=//p'
+  done
+done | sort -n | tail -1

@@ -76,8 +76,9 @@ The original firmware is unchanged.
   average (lean within 0.25: +1 would be fully on the side of MAIN), wide
   (correlation below 0.9: 1 would be mono), and the bass stays in the middle
   (except for the classic waveforms, whose saws are detuned, and the
-  harmonic model, whose fundamental is the same in both channels). In the
-  split layout, the voices are not processed.
+  harmonic model, whose fundamental is the same in both channels). No
+  model reaches full scale (the models with a limiter stay below 0.8). In
+  the split layout, the voices are not processed.
 - `settings.txt`: the settings are compatible with the original firmware in
   both directions: after an update, the model and the calibrations are kept;
   after going back to the original firmware, it starts with the model it

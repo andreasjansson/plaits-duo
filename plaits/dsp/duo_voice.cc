@@ -37,6 +37,9 @@ using namespace stmlib;
 // Gain applied to each voice when the two voices are mixed together.
 const float kDuoMixGain = 0.6f;
 
+// Number of blocks muted in the stereo layout after a change of model (1ms).
+const int kMuteBlocksAfterEngineChange = 4;
+
 struct DuoEngineSettings {
   bool already_enveloped;
   float split_gain;
@@ -48,8 +51,9 @@ struct DuoEngineSettings {
 // Split layout: same gains as the OUT signal of the original engines.
 // Stereo layout: each model has its own way of making a stereo signal
 // (chosen by ear), at the same loudness as in the split layout. The phase
-// changes made by the diffuser raise the peaks of FM sounds, which go
-// through a limiter, like the string and speech models.
+// changes made by the diffuser raise the peaks of FM sounds, and the chorus
+// those of the bass of the wavetable model: they go through a limiter, like
+// the string and speech models.
 const DuoEngineSettings kDuoEngineSettings[kNumDuoEngines] = {
   // Classic waveforms: one saw per channel (see DuoVirtualAnalogEngine).
   { false, 0.8f, 0.8f, DUO_STEREO_NATIVE, DUO_STEREO_EFFECT_NONE },
@@ -63,7 +67,7 @@ const DuoEngineSettings kDuoEngineSettings[kNumDuoEngines] = {
   // channels (see DuoAdditiveEngine).
   { false, 0.8f, 0.8f, DUO_STEREO_NATIVE, DUO_STEREO_EFFECT_NONE },
   // Wavetable.
-  { false, 0.6f, 0.6f, DUO_STEREO_VOICES, DUO_STEREO_EFFECT_CHORUS },
+  { false, 0.6f, -0.75f, DUO_STEREO_VOICES, DUO_STEREO_EFFECT_CHORUS },
   // String.
   { true, -1.0f, -1.0f, DUO_STEREO_MIX, DUO_STEREO_EFFECT_ENSEMBLE },
   // Vowel.
@@ -93,6 +97,7 @@ void DuoVoice::Init(BufferAllocator* allocator) {
 
   engine_quantizer_.Init();
   previous_engine_index_ = -1;
+  mute_blocks_ = 0;
   engine_cv_ = 0.0f;
 
   out_post_processor_.Init();
@@ -154,6 +159,7 @@ void DuoVoice::Render(
     aux_post_processor_.Reset();
     stereo_.set_effect(e->stereo_effect);
     previous_engine_index_ = engine_index;
+    mute_blocks_ = kMuteBlocksAfterEngineChange;
   }
 
   const bool stereo = !(patch.duo_engine & 8);
@@ -254,6 +260,17 @@ void DuoVoice::Render(
       p, num_voices, stereo && layout != DUO_STEREO_VOICES,
       out_buffer_, aux_buffer_, size,
       &already_enveloped);
+  if (mute_blocks_) {
+    --mute_blocks_;
+    if (stereo) {
+      // Some engines start with a click (the wavetable engine: a spike much
+      // louder than full scale), which the stereo effects would echo, and
+      // to which the limiter would react by turning the sound down for a
+      // while. The split layout keeps the clicks of the original engines.
+      fill(&out_buffer_[0], &out_buffer_[size], 0.0f);
+      fill(&aux_buffer_[0], &aux_buffer_[size], 0.0f);
+    }
+  }
   if (stereo && layout == DUO_STEREO_NATIVE) {
     // The engine has rendered the two channels.
   } else if (stereo) {

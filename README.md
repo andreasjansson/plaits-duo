@@ -43,12 +43,15 @@ stereo image:
 | 3 | 2-operator FM | moving diffuser: two different chains of allpass filters, whose delays move slowly (the bass stays in the middle), followed by a limiter |
 | 4 | formant | moving diffuser |
 | 5 | harmonic | each harmonic has its own, slowly changing, phase difference between the channels (neighbouring harmonics turn in opposite directions; the fundamental is the same in both) |
-| 6 | wavetable | the chorus of the Juno-60 (mode I) |
+| 6 | wavetable | the chorus of the Juno-60 (mode I), followed by a limiter |
 | 7 | string | the ensemble of the string machine of Plaits 1.2, with mirrored taps in the two channels |
 | 8 | vowel | moving diffuser |
 
 In every model, the two channels have the same level in every frequency
-band, and the image is centered on average. Some images move: with the
+band, and the image is centered on average. Nothing reaches full scale: the
+models whose peaks grow with their stereo processing (FM, wavetable), and
+the string and vowel models, go through a limiter, which turns the sound
+down as soon as a peak would go above 0.8. Some images move: with the
 classic waveforms, the detuned saws make the image sway slowly from side to
 side, and the harmonic model does the same when one or two harmonics
 dominate the spectrum.
@@ -100,7 +103,7 @@ its memory and CPU use, and its update file.
 
 ## Resources
 
-The firmware has 720 bytes of flash memory left (of 224kB). The RAM leaves
+The firmware has 528 bytes of flash memory left (of 224kB). The RAM leaves
 4.9kB for the stack, of which the benchmarks use at most 1.9kB.
 
 CPU use, measured on an emulated Cortex-M4 with the timing of the module's
@@ -112,13 +115,13 @@ its own source: the modal resonator, 15268 cycles):
 | model | 1 voice, stereo | 1 voice, split | 2 voices, stereo | 2 voices, split |
 | --- | --- | --- | --- | --- |
 | classic waveforms | 50% | 47% | 87% | 71% |
-| waveshaper | 45% | 55% | 78% | 88% |
-| 2-operator FM | 59% | 47% | 89% | 73% |
+| waveshaper | 46% | 56% | 79% | 90% |
+| 2-operator FM | 59% | 48% | 89% | 73% |
 | formant | 51% | 44% | 78% | 66% |
 | harmonic | 58% | 61% | 90% | 88% |
-| wavetable | 61% | 55% | 86% | 75% |
+| wavetable | 66% | 56% | 92% | 78% |
 | string | 96% | 89% | 96% | 89% |
-| vowel | 66% | 62% | 87% | 89% |
+| vowel | 67% | 63% | 87% | 90% |
 
 To make room for duo mode in the flash memory, the code is built with less
 loop unrolling (see `plaits/makefile`). The models of the original firmware

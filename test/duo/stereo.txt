@@ -230,3 +230,27 @@ max_diff=0
 max_diff=0
 max_diff=0
 max_diff=0
+
+===
+in the stereo layout, no model reaches full scale (with one or two voices, triggered notes and different settings): the FM, wavetable, string and vowel models go through a limiter whose output never goes above 0.8
+===
+for model in 0 1 2 3 4 5 6 7; do echo "$model: $(./stereo_peak $model)"; done
+---
+0: {{ p0 }}
+1: {{ p1 }}
+2: {{ p2 }}
+3: {{ p3 }}
+4: {{ p4 }}
+5: {{ p5 }}
+6: {{ p6 }}
+7: {{ p7 }}
+---
+where
+* p0 < 0.98
+* p1 < 0.98
+* p2 <= 0.8
+* p3 < 0.98
+* p4 < 0.98
+* p5 <= 0.8
+* p6 <= 0.8
+* p7 <= 0.8

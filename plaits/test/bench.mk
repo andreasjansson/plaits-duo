@@ -56,9 +56,13 @@ DSP_OBJECTS = $(addprefix $(BUILD_DIR),$(notdir $(DSP_SOURCES:.cc=.o)))
 
 BENCH_LDFLAGS = -nostartfiles -Wl,--gc-sections -T $(BENCH_SRC)bench.ld
 
+# (With the dependencies on the headers, which describe the layout of the
+# objects of the firmware.)
 $(BENCH_DIR)%.o: $(BENCH_SRC)%.cc
 	mkdir -p $(BENCH_DIR)
-	$(CXX) -c $(CCFLAGS) $(CPPFLAGS) $< -o $@
+	$(CXX) -c $(CCFLAGS) $(CPPFLAGS) -MMD -MP $< -o $@
+
+-include $(wildcard $(BENCH_DIR)*.d)
 
 $(BENCH_DIR)duo.elf: $(BENCH_DIR)startup.o $(BENCH_DIR)bench_duo.o \
 		$(DSP_OBJECTS) $(BENCH_SRC)bench.ld

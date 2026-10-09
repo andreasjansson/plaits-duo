@@ -223,5 +223,6 @@ if __name__ == '__main__':
     sys.exit('Usage: %s BENCHMARK.elf RESULTS.json [--profile TAG]' %
              sys.argv[0])
   tag = int(sys.argv[4], 0) if len(sys.argv) == 5 else None
+  results = Run(sys.argv[1], tag)
   with open(sys.argv[2], 'w') as f:
-    json.dump(Run(sys.argv[1], tag), f)
+    json.dump(results, f)

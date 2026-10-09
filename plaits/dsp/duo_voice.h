@@ -120,6 +120,7 @@ class DuoVoice {
   stmlib::HysteresisQuantizer engine_quantizer_;
 
   int previous_engine_index_;
+  int mute_blocks_;
   float engine_cv_;
 
   float previous_note_[kNumDuoVoices];

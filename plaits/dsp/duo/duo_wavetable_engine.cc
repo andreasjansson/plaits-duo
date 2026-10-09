@@ -104,6 +104,7 @@ void DuoWavetableVoice::Init() {
 void DuoWavetableVoice::Render(
     float f0,
     const DuoWavetableBlend* blend,
+    bool restart,
     float* out,
     size_t size) {
   ParameterInterpolator f0_modulation(&previous_f0_, f0, size);
@@ -159,6 +160,13 @@ void DuoWavetableVoice::Render(
     const float mix = (((a * p_fractional) - b_neg) * p_fractional + c) * \
         p_fractional + x0;
     
+    if (restart) {
+      // The differentiator starts from this sample, rather than from the
+      // last one rendered long ago: no click.
+      diff_out_.Init();
+      diff_out_.Process(0.0f, mix);
+      restart = false;
+    }
     *out++ = diff_out_.Process(cutoff, mix) * gain;
   }
   phase_ = phase;
@@ -183,9 +191,11 @@ void DuoWavetableEngine::Init(BufferAllocator* allocator) {
   previous_z_ = 0.0f;
   
   UpdateWaves(0, 0, 0);
+  second_voice_active_ = false;
 }
 
 void DuoWavetableEngine::Reset() {
+  second_voice_active_ = false;
 }
 
 void DuoWavetableEngine::UpdateWaves(int x, int y, int z) {
@@ -293,9 +303,17 @@ void DuoWavetableEngine::Render(
   DuoWavetableBlend blend[kMaxBlockSize];
   ComputeBlend(parameters[0], blend, size);
   
+  // The first voice starts as in the original engine (with a click, in the
+  // split layout), the second one without a click when LEVEL is patched.
+  const bool restart_second_voice = num_voices == 2 && !second_voice_active_;
+  second_voice_active_ = num_voices == 2;
   for (int i = 0; i < num_voices; ++i) {
     voice_[i].Render(
-        NoteToFrequency(parameters[i].note), blend, i == 0 ? out : aux, size);
+        NoteToFrequency(parameters[i].note),
+        blend,
+        i == 1 && restart_second_voice,
+        i == 0 ? out : aux,
+        size);
   }
 }
 

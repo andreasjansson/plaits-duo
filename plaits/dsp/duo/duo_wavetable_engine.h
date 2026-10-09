@@ -51,7 +51,13 @@ class DuoWavetableVoice {
   ~DuoWavetableVoice() { }
 
   void Init();
-  void Render(float f0, const DuoWavetableBlend* blend, float* out, size_t size);
+  // restart: the voice was not rendered in the previous block.
+  void Render(
+      float f0,
+      const DuoWavetableBlend* blend,
+      bool restart,
+      float* out,
+      size_t size);
 
  private:
   float phase_;
@@ -86,6 +92,7 @@ class DuoWavetableEngine : public DuoEngine {
   void UpdateWaves(int x, int y, int z);
 
   DuoWavetableVoice voice_[kNumDuoVoices];
+  bool second_voice_active_;
 
   // Position in the wavetable, shared by the two voices.
   float x_pre_lp_;

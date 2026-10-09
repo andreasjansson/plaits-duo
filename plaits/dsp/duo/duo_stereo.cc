@@ -221,6 +221,7 @@ void DuoStereo::Init() {
 
 void DuoStereo::set_effect(DuoStereoEffect effect) {
   effect_ = effect;
+  peak_ = 0.5f;
   phase_[0] = phase_[1] = 0.0f;
   filter_state_[0] = filter_state_[1] = 0.0f;
   for (int i = 0; i < 2; ++i) {
@@ -460,7 +461,11 @@ void DuoStereo::Limit(float pre_gain, float* left, float* right, size_t size) {
     const float l = left[i] * pre_gain;
     const float r = right[i] * pre_gain;
     const float level = max(fabsf(l), fabsf(r));
-    SLOPE(peak, level, 0.05f, 0.00002f);
+    if (level > peak) {
+      peak = level;
+    } else {
+      peak += (level - peak) * 0.00002f;
+    }
     const float gain = (peak <= 1.0f ? 1.0f : 1.0f / peak) * 0.8f;
     left[i] = l * gain;
     right[i] = r * gain;

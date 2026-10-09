@@ -145,13 +145,15 @@ class DuoStereo {
 
   void Init();
 
-  // Selects the effect, and clears its memory.
+  // Selects the effect, and clears its memory (and that of the limiter).
   void set_effect(DuoStereoEffect effect);
 
   // In: the mono mix in left. Out: the left and right channels.
   void Process(float* left, float* right, size_t size);
 
-  // Same as stmlib::Limiter, with the same gain for both channels.
+  // As stmlib::Limiter, with the same gain for both channels, and an
+  // instant attack: the output never goes above 0.8 (stmlib::Limiter lets
+  // the start of a sudden attack through, which then clips).
   void Limit(float pre_gain, float* left, float* right, size_t size);
 
  private:
