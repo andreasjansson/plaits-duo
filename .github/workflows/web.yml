@@ -40,7 +40,11 @@ jobs:
           curl -sSfL https://github.com/WebAssembly/binaryen/releases/download/version_133/binaryen-version_133-x86_64-linux.tar.gz | tar -xz
 
       - name: Build the firmware update file
-        run: make -f plaits/makefile TOOLCHAIN_PATH="$HOME/tools/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/" PYTHON=python wav
+        # (resources.cc is generated, and committed: newer than its sources,
+        # so that make does not run stmlib's Python 2 resource compiler.)
+        run: |
+          touch plaits/resources.cc plaits/resources.h
+          make -f plaits/makefile TOOLCHAIN_PATH="$HOME/tools/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/" PYTHON=python wav
 
       - name: Build the web demo
         run: make -f web/web.mk WASI_SDK_PATH="$HOME/tools/wasi-sdk-34.0-x86_64-linux" BINARYEN_PATH="$HOME/tools/binaryen-version_133" PYTHON=python
