@@ -234,7 +234,7 @@ button:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
       </div>
     </div>
     <div class="dl">
-      <button type="button" class="download" id="download" title="plaits_duo_firmware.zip (about 1 MB), with the WAV update file inside. To update: hold the left button while powering the module on, then play the WAV into the MODEL input.">
+      <button type="button" class="download" id="download" title="plaits_duo_firmware.wav (18 MB), the update file. To update: hold the left button while powering the module on, then play the WAV into the MODEL input.">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span><span class="wide">Download </span>firmware</span>
       </button>
@@ -305,7 +305,7 @@ button:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
         <div>
           <h3>Install the firmware</h3>
           <ol>
-            <li><button type="button" class="help-dl" id="help-download">Download the firmware</button>, unzip it.</li>
+            <li><button type="button" class="help-dl" id="help-download">Download the firmware</button> (a WAV file).</li>
             <li>Patch a cable from your computer's or phone's headphone output into <b>MODEL</b>. <b>FREQUENCY</b> at noon.</li>
             <li>Power the module on holding the <b>left button</b>.</li>
             <li>Notifications off (any other sound spoils it), then play the WAV. The level meter rises from the 4th LED: set <b>FREQUENCY</b> for 2 or 3 lit. The bottom LEDs circle as it loads. All red: press left, play louder.</li>
@@ -1226,138 +1226,21 @@ document.addEventListener('keyup', e => {
 });
 
 // ---------- firmware download ----------
-// The update file is published in two halves (two WAV files): they are
-// joined again, and saved in a zip.
-const FIRMWARE_PARTS = ['plaits_duo_firmware_1.wav', 'plaits_duo_firmware_2.wav'];
+// The update file, next to the page.
+const FIRMWARE = 'plaits_duo_firmware.wav';
 
-// The format and sample chunks of a WAV file.
-function wavChunks(buffer) {
-  const view = new DataView(buffer);
-  const chunks = {};
-  for (let p = 12; p + 8 <= buffer.byteLength; ) {
-    const tag = String.fromCharCode(...new Uint8Array(buffer, p, 4));
-    const size = view.getUint32(p + 4, true);
-    chunks[tag] = new Uint8Array(buffer, p + 8, size);
-    p += 8 + size + (size & 1);
-  }
-  return chunks;
-}
-
-async function firmwareWav() {
-  const parts = await Promise.all(FIRMWARE_PARTS.map(async f => {
-    const r = await fetch(f);
-    if (!r.ok) throw { code: 'fetch' };
-    return wavChunks(await r.arrayBuffer());
-  }));
-  const fmt = parts[0]['fmt '];
-  const size = parts.reduce((n, p) => n + p.data.length, 0);
-  const wav = new Uint8Array(12 + 8 + fmt.length + 8 + size);
-  const view = new DataView(wav.buffer);
-  const ascii = (o, t) => { for (let i = 0; i < 4; ++i) wav[o + i] = t.charCodeAt(i); };
-  ascii(0, 'RIFF'); view.setUint32(4, wav.length - 8, true); ascii(8, 'WAVE');
-  ascii(12, 'fmt '); view.setUint32(16, fmt.length, true); wav.set(fmt, 20);
-  let o = 20 + fmt.length;
-  ascii(o, 'data'); view.setUint32(o + 4, size, true); o += 8;
-  for (const p of parts) { wav.set(p.data, o); o += p.data.length; }
-  return wav;
-}
-
-const CRC_TABLE = (() => {
-  const t = new Uint32Array(256);
-  for (let n = 0; n < 256; ++n) {
-    let c = n;
-    for (let k = 0; k < 8; ++k) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    t[n] = c >>> 0;
-  }
-  return t;
-})();
-function crc32(bytes) {
-  let c = 0xffffffff;
-  for (let i = 0; i < bytes.length; ++i) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
-
-async function deflateRaw(bytes) {
-  if (typeof CompressionStream === 'undefined') return null;
-  try {
-    const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'));
-    return new Uint8Array(await new Response(stream).arrayBuffer());
-  } catch (e) {
-    return null;
-  }
-}
-
-// A zip file with one file, compressed if the browser can.
-async function zip(name, bytes) {
-  const file = new TextEncoder().encode(name);
-  const crc = crc32(bytes);
-  const deflated = await deflateRaw(bytes);
-  const method = deflated ? 8 : 0;
-  const body = deflated || bytes;
-  const date = ((2026 - 1980) << 9) | (10 << 5) | 9;
-  const header = (signature, central) => {
-    const v = new DataView(new ArrayBuffer(central ? 46 : 30));
-    let o = 0;
-    const u16 = x => { v.setUint16(o, x, true); o += 2; };
-    const u32 = x => { v.setUint32(o, x, true); o += 4; };
-    u32(signature);
-    if (central) u16(20);
-    u16(20); u16(0); u16(method); u16(0); u16(date);
-    u32(crc); u32(body.length); u32(bytes.length); u16(file.length); u16(0);
-    if (central) { u16(0); u16(0); u16(0); u32(0); u32(0); }
-    return v;
-  };
-  const local = header(0x04034b50, false);
-  const central = header(0x02014b50, true);
-  const end = new DataView(new ArrayBuffer(22));
-  end.setUint32(0, 0x06054b50, true);
-  end.setUint16(8, 1, true);
-  end.setUint16(10, 1, true);
-  end.setUint32(12, 46 + file.length, true);
-  end.setUint32(16, 30 + file.length + body.length, true);
-  return new Blob([local, file, body, central, file, end], { type: 'application/zip' });
-}
-
-async function firmwareZip() {
-  return zip('plaits_duo_firmware.wav', await firmwareWav());
-}
-
-let downloadsPromise = null;
-function downloadsCapability() {
-  if (!downloadsPromise) {
-    downloadsPromise = window.claude && window.claude.use
-      ? Promise.resolve(window.claude.use('downloads')).catch(() => null)
-      : Promise.resolve(null);
-  }
-  return downloadsPromise;
-}
 // From the button in the header, or the one in the help.
-async function saveFirmware(button) {
-  button.disabled = true;
-  flash('Preparing the firmware file…');
-  try {
-    const downloads = await downloadsCapability();
-    if (!downloads) {
-      flash('Saving files is not available in this view. Open the page in the Claude app or on claude.ai.');
-      return;
-    }
-    const data = await firmwareZip();
-    await downloads.save({ filename: 'plaits_duo_firmware.zip', data });
-    flash('Saved plaits_duo_firmware.zip.');
-  } catch (err) {
-    const code = err && err.code;
-    flash(
-        code === 'declined' ? '' :
-        code === 'rate_limited' ? 'A save prompt is already open.' :
-        code === 'extension_not_enabled' ? 'Zip files cannot be saved in this view.' :
-        code === 'fetch' ? 'The file could not be loaded. Reload the page and try again.' :
-        'The file could not be saved here.');
-  } finally {
-    button.disabled = false;
-  }
+function saveFirmware() {
+  const a = document.createElement('a');
+  a.href = FIRMWARE;
+  a.download = FIRMWARE;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  flash('Downloading plaits_duo_firmware.wav (18 MB).');
 }
 for (const id of ['download', 'help-download']) {
-  document.getElementById(id).addEventListener('click', e => saveFirmware(e.currentTarget));
+  document.getElementById(id).addEventListener('click', saveFirmware);
 }
 
 // ---------- header ----------

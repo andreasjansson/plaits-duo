@@ -26,8 +26,8 @@
 # picker.html), its mark, its audio thread and loops, the firmware
 # compiled to WebAssembly (with the simulated hardware of plaits-sim) and its
 # JavaScript translation (for pages which cannot compile WebAssembly), and
-# the firmware update file in two halves, which the page joins again in a
-# zip when it is downloaded (the firmware must have been built: make wav).
+# the firmware update file, which the page offers to download (the firmware
+# must have been built: make wav).
 #
 # make -f web/web.mk WASI_SDK_PATH=/path/to/wasi-sdk BINARYEN_PATH=/path/to/binaryen
 #
@@ -35,7 +35,6 @@
 
 WASI_SDK_PATH ?=
 BINARYEN_PATH ?=
-PYTHON ?= python3
 BUILD_DIR = build/web/
 
 CXX = $(WASI_SDK_PATH)/bin/clang++
@@ -58,7 +57,7 @@ HEADERS = $(wildcard plaits/*.h plaits/dsp/*.h plaits/dsp/*/*.h \
 
 all: $(BUILD_DIR)index.html $(BUILD_DIR)picker.html $(BUILD_DIR)worklet.js \
 	$(BUILD_DIR)loops.js $(BUILD_DIR)plaits.wasm $(BUILD_DIR)plaits_fallback.js \
-	$(BUILD_DIR)plaits_duo_firmware_1.wav $(BUILD_DIR)gandaberunda.png
+	$(BUILD_DIR)plaits_duo_firmware.wav $(BUILD_DIR)gandaberunda.png
 
 $(BUILD_DIR)plaits.wasm: $(SOURCES) $(HEADERS)
 	mkdir -p $(BUILD_DIR)
@@ -76,9 +75,9 @@ $(BUILD_DIR)%: web/%
 	mkdir -p $(BUILD_DIR)
 	cp $< $@
 
-$(BUILD_DIR)plaits_duo_firmware_1.wav: build/plaits/plaits.wav web/split_wav.py
+$(BUILD_DIR)plaits_duo_firmware.wav: build/plaits/plaits.wav
 	mkdir -p $(BUILD_DIR)
-	$(PYTHON) web/split_wav.py $< $@ $(BUILD_DIR)plaits_duo_firmware_2.wav
+	cp $< $@
 
 clean:
 	rm -rf $(BUILD_DIR)

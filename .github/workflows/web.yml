@@ -47,7 +47,7 @@ jobs:
           make -f plaits/makefile TOOLCHAIN_PATH="$HOME/tools/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/" PYTHON=python wav
 
       - name: Build the web demo
-        run: make -f web/web.mk WASI_SDK_PATH="$HOME/tools/wasi-sdk-34.0-x86_64-linux" BINARYEN_PATH="$HOME/tools/binaryen-version_133" PYTHON=python
+        run: make -f web/web.mk WASI_SDK_PATH="$HOME/tools/wasi-sdk-34.0-x86_64-linux" BINARYEN_PATH="$HOME/tools/binaryen-version_133"
 
       - uses: actions/upload-pages-artifact@v3
         with:
