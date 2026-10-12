@@ -41,12 +41,30 @@ Patch patch;
 Modulations modulations;
 Voice::Frame frames[kMaxBlockSize];
 
+// FNV-1a of the output of each number of voices and duo_engine, which
+// emulator.py reports: optimizations must leave it unchanged.
+uint32_t bench_output_hash[2][16];
+
+void Hash(int voices, int duo_engine) {
+  uint32_t h = bench_output_hash[voices - 1][duo_engine];
+  for (size_t i = 0; i < kBlockSize; ++i) {
+    h = (h ^ static_cast<uint16_t>(frames[i].out)) * 16777619u;
+    h = (h ^ static_cast<uint16_t>(frames[i].aux)) * 16777619u;
+  }
+  bench_output_hash[voices - 1][duo_engine] = h;
+}
+
 const float kHarmonics[] = { 0.05f, 0.25f, 0.4f, 0.5f, 0.75f, 0.95f };
 const float kTimbreMorph[][2] = {
   { 0.1f, 0.1f }, { 0.5f, 0.5f }, { 0.9f, 0.9f }, { 0.1f, 0.9f }
 };
 
 int main() {
+  for (int i = 0; i < 2; ++i) {
+    for (int j = 0; j < 16; ++j) {
+      bench_output_hash[i][j] = 2166136261u;
+    }
+  }
   BufferAllocator allocator(shared_buffer, 16384);
   voice.Init(&allocator);
   duo_voice.Init(&allocator);
@@ -76,6 +94,7 @@ int main() {
                 modulations.note = 12.0f * float(tm);
                 modulations.level_note = 7.0f + 5.0f * float(h);
                 duo_voice.Render(patch, modulations, frames, kBlockSize);
+                Hash(voices, patch.duo_engine);
               }
               bench_mark(0x10000 | tag);
               for (int i = 0; i < 24; ++i) {
@@ -87,6 +106,9 @@ int main() {
                 }
                 duo_voice.Render(patch, modulations, frames, kBlockSize);
                 bench_mark(tag);
+                // (Not measured.)
+                Hash(voices, patch.duo_engine);
+                bench_mark(0x10000 | tag);
               }
               ++setting;
             }

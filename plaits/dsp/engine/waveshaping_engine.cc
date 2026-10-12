@@ -92,7 +92,8 @@ void WaveshapingEngine::RenderInternal(
   
   // Start from bandlimited slope signal.
   slope_.Render<OSCILLATOR_SHAPE_SLOPE>(f0, pw, out, size);
-  if (!stereo) {
+  // AUX is not rendered in duo mode's split layout.
+  if (!stereo && aux) {
     triangle_.Render<OSCILLATOR_SHAPE_SLOPE>(f0, 0.5f, aux, size);
   }
 
@@ -154,11 +155,14 @@ void WaveshapingEngine::RenderInternal(
     }
     float fold = InterpolateHermite(
         lut_fold + 1, index, 512.0f);
+    out[i] = fold;
+    if (!aux) {
+      continue;
+    }
     float fold_2 = -InterpolateHermite(
         lut_fold_2 + 1, index, 512.0f);
     
     float sine = InterpolateWrap(lut_sine, aux[i] * 0.25f + 0.5f, 1024.0f);
-    out[i] = fold;
     aux[i] = sine + (fold_2 - sine) * overtone_gain_modulation.Next();
   }
 }

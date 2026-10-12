@@ -44,9 +44,13 @@ class LowPassGate {
   
   void Init() {
     previous_gain_ = 0.0f;
-    filter_.Init();
+    state_1_ = state_2_ = 0.0f;
   }
   
+  // The filter is stmlib::Svf, low-pass, set with
+  // set_f_q<FREQUENCY_DIRTY>(frequency, 0.4f), with its state in local
+  // variables through the loop (the compiler would otherwise store it at
+  // every sample: the buffers could hold it).
   void Process(
       float gain,
       float frequency,
@@ -54,12 +58,18 @@ class LowPassGate {
       float* in_out,
       size_t size) {
     stmlib::ParameterInterpolator gain_modulation(&previous_gain_, gain, size);
-    filter_.set_f_q<stmlib::FREQUENCY_DIRTY>(frequency, 0.4f);
+    const float g = stmlib::OnePole::tan<stmlib::FREQUENCY_DIRTY>(frequency);
+    const float r = 1.0f / 0.4f;
+    const float h = 1.0f / (1.0f + r * g + g * g);
+    float state_1 = state_1_;
+    float state_2 = state_2_;
     while (size--) {
       const float s = *in_out * gain_modulation.Next();
-      const float lp = filter_.Process<stmlib::FILTER_MODE_LOW_PASS>(s);
+      const float lp = LowPass(s, g, r, h, &state_1, &state_2);
       *in_out++ = lp + (s - lp) * hf_bleed;
     }
+    state_1_ = state_1;
+    state_2_ = state_2;
   }
   
   void Process(
@@ -71,18 +81,36 @@ class LowPassGate {
       size_t size,
       size_t stride) {
     stmlib::ParameterInterpolator gain_modulation(&previous_gain_, gain, size);
-    filter_.set_f_q<stmlib::FREQUENCY_DIRTY>(frequency, 0.4f);
+    const float g = stmlib::OnePole::tan<stmlib::FREQUENCY_DIRTY>(frequency);
+    const float r = 1.0f / 0.4f;
+    const float h = 1.0f / (1.0f + r * g + g * g);
+    float state_1 = state_1_;
+    float state_2 = state_2_;
     while (size--) {
       const float s = *in++ * gain_modulation.Next();
-      const float lp = filter_.Process<stmlib::FILTER_MODE_LOW_PASS>(s);
+      const float lp = LowPass(s, g, r, h, &state_1, &state_2);
       *out = stmlib::Clip16(1 + static_cast<int32_t>(lp + (s - lp) * hf_bleed));
       out += stride;
     }
+    state_1_ = state_1;
+    state_2_ = state_2;
   }
   
  private:
+  // Same as stmlib::Svf::Process<FILTER_MODE_LOW_PASS>.
+  static inline float LowPass(
+      float in, float g, float r, float h, float* state_1, float* state_2) {
+    const float hp = (in - r * *state_1 - g * *state_1 - *state_2) * h;
+    const float bp = g * hp + *state_1;
+    *state_1 = g * hp + bp;
+    const float lp = g * bp + *state_2;
+    *state_2 = g * bp + lp;
+    return lp;
+  }
+
   float previous_gain_;
-  stmlib::Svf filter_;
+  float state_1_;
+  float state_2_;
   
   DISALLOW_COPY_AND_ASSIGN(LowPassGate);
 };

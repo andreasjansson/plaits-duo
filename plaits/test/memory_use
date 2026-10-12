@@ -7,5 +7,7 @@ size="${TOOLCHAIN_PATH}bin/arm-none-eabi-size"
 nm="${TOOLCHAIN_PATH}bin/arm-none-eabi-nm"
 used=$("$size" -A "$1" | awk '/^\.isr_vector|^\.text|^\.data/ { s += $2 } END { print s }')
 end_of_variables=$("$nm" "$1" | awk '/ _ebss$/ { print $1 }')
-echo "flash: $((224 * 1024 - used)) bytes free"
+# The flash memory of the firmware (224k), or of the rig firmware (below its
+# updater, 208k): the second argument, in kB.
+echo "flash: $((${2:-224} * 1024 - used)) bytes free"
 echo "stack: $((0x20008000 - 0x$end_of_variables)) bytes"

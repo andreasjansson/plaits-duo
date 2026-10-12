@@ -50,6 +50,25 @@ const float a0 = (440.0f / 8.0f) / kCorrectedSampleRate;
 const size_t kMaxBlockSize = 24;
 const size_t kBlockSize = 12;
 
+// The value of x, from a register: a constant used in a loop stays in a
+// register. The firmware is compiled with -fno-move-loop-invariants, and the
+// compiler would otherwise load the constant from the flash memory at each
+// iteration: about 5 cycles on the module, as the read also stalls the
+// fetching of the instructions.
+inline float InRegister(float x) {
+#ifdef __arm__
+  __asm__("" : "+t"(x));
+#endif  // __arm__
+  return x;
+}
+
+inline uint32_t InRegister(uint32_t x) {
+#ifdef __arm__
+  __asm__("" : "+r"(x));
+#endif  // __arm__
+  return x;
+}
+
 }  // namespace plaits
 
 #endif  // PLAITS_DSP_DSP_H_

@@ -49,11 +49,24 @@ const size_t kDuoStretchMask = kDelayLineSize / 4 - 1;
 
 namespace {
 
-// Same as Random::GetFloat, on a local copy of the state.
-inline float DuoRandomFloat(uint32_t* state) {
-  *state = *state * 1664525L + 1013904223L;
-  return static_cast<float>(*state) / 4294967296.0f;
-}
+
+// Same as Random::GetFloat, on a local copy of the state, with the constants
+// of the loop which calls it.
+struct DuoRandom {
+  DuoRandom()
+      : a(InRegister(uint32_t(1664525))),
+        c(InRegister(uint32_t(1013904223))),
+        scale(InRegister(1.0f / 4294967296.0f)) { }
+
+  inline float GetFloat(uint32_t* state) const {
+    *state = *state * a + c;
+    return static_cast<float>(*state) * scale;
+  }
+
+  const uint32_t a;
+  const uint32_t c;
+  const float scale;
+};
 
 }  // namespace
 
@@ -79,30 +92,89 @@ void DuoString::Reset() {
   src_phase_ = 0.0f;
 }
 
-void DuoString::Process(
-    float f0,
-    float non_linearity_amount,
+void DuoStringParameters::Compute(
+    float accent,
+    float structure,
     float brightness,
-    float damping,
+    float damping) {
+  // StringVoice::Render.
+  const float density = brightness * brightness;
+
+  brightness += 0.25f * accent * (1.0f - brightness);
+  damping += 0.25f * accent * (1.0f - damping);
+
+  const float range = 72.0f;
+  this->accent = accent;
+  this->brightness = brightness;
+  excitation_ratio = SemitonesToRatio(
+      (brightness * (2.0f - brightness) - 0.5f) * range);
+
+  // Same as Dust(), with the division done once.
+  dust_f = 0.00005f + 0.99995f * density * density;
+  inv_dust_f = 1.0f / dust_f;
+  dust_gain = 8.0f - dust_f * 6.0f;
+
+  float non_linearity = structure < 0.24f
+      ? (structure - 0.24f) * 4.166f
+      : (structure > 0.26f ? (structure - 0.26f) * 1.35135f : 0.0f);
+
+  // String::Process.
+  curved_bridge = non_linearity <= 0.0f;
+  non_linearity_amount = curved_bridge ? -non_linearity : non_linearity;
+
+  // String::ProcessInternal.
+  float damping_cutoff = min(
+      12.0f + damping * damping * 60.0f + brightness * 24.0f,
+      84.0f);
+  damping_ratio = SemitonesToRatio(damping_cutoff);
+
+  // Crossfade to infinite decay.
+  infinite_decay = damping >= 0.95f;
+  to_infinite = 0.0f;
+  if (infinite_decay) {
+    to_infinite = 20.0f * (damping - 0.95f);
+    brightness += to_infinite * (1.0f - brightness);
+    damping_cutoff += to_infinite * (128.0f - damping_cutoff);
+  }
+
+  damping_compensation = Interpolate(lut_svf_shift, damping_cutoff, 1.0f);
+
+  stretch_point = non_linearity_amount * (2.0f - non_linearity_amount) * 0.225f;
+
+  float noise_amount_sqrt = non_linearity_amount > 0.75f
+      ? 4.0f * (non_linearity_amount - 0.75f)
+      : 0.0f;
+  noise_amount = noise_amount_sqrt * noise_amount_sqrt * 0.1f;
+  noise_filter = 0.06f + 0.94f * brightness * brightness;
+
+  float bridge_curving_sqrt = non_linearity_amount;
+  bridge_curving = bridge_curving_sqrt * bridge_curving_sqrt * 0.01f;
+
+  ap_gain = -0.618f * non_linearity_amount / (0.15f + fabsf(non_linearity_amount));
+  stretch_factor = 0.408f - stretch_point * 0.308f;
+}
+
+void DuoString::Process(
+    const DuoStringParameters& parameters,
+    float f0,
     const float* in,
     float* out,
     size_t size) {
-  if (non_linearity_amount <= 0.0f) {
+  if (parameters.curved_bridge) {
     ProcessInternal<STRING_NON_LINEARITY_CURVED_BRIDGE>(
-        f0, -non_linearity_amount, brightness, damping, in, out, size);
+        parameters, f0, in, out, size);
   } else {
     ProcessInternal<STRING_NON_LINEARITY_DISPERSION>(
-        f0, non_linearity_amount, brightness, damping, in, out, size);
+        parameters, f0, in, out, size);
   }
 }
 
-// Same as String::ProcessInternal.
+// Same as String::ProcessInternal (the settings which do not depend on the
+// pitch are in parameters).
 template<StringNonLinearity non_linearity>
 void DuoString::ProcessInternal(
+    const DuoStringParameters& parameters,
     float f0,
-    float non_linearity_amount,
-    float brightness,
-    float damping,
     const float* in,
     float* out,
     size_t size) {
@@ -120,52 +192,44 @@ void DuoString::ProcessInternal(
     src_ratio = 1.0f;
   }
 
-  float damping_cutoff = min(
-      12.0f + damping * damping * 60.0f + brightness * 24.0f,
-      84.0f);
-  float damping_f = min(f0 * SemitonesToRatio(damping_cutoff), 0.499f);
+  float damping_f = min(f0 * parameters.damping_ratio, 0.499f);
 
   // Crossfade to infinite decay.
-  if (damping >= 0.95f) {
-    float to_infinite = 20.0f * (damping - 0.95f);
-    brightness += to_infinite * (1.0f - brightness);
-    damping_f += to_infinite * (0.4999f - damping_f);
-    damping_cutoff += to_infinite * (128.0f - damping_cutoff);
+  if (parameters.infinite_decay) {
+    damping_f += parameters.to_infinite * (0.4999f - damping_f);
   }
 
   // Same as iir_damping_filter_.set_f_q<FREQUENCY_FAST>(damping_f, 0.5f).
   iir_damping_filter_.set_g_r(OnePole::tan<FREQUENCY_FAST>(damping_f), 2.0f);
 
-  float damping_compensation = Interpolate(lut_svf_shift, damping_cutoff, 1.0f);
-
   // Linearly interpolate delay time.
   ParameterInterpolator delay_modulation(
-      &delay_, delay * damping_compensation, size);
+      &delay_, delay * parameters.damping_compensation, size);
 
-  float stretch_point = non_linearity_amount * (2.0f - non_linearity_amount) * 0.225f;
+  const float stretch_point = parameters.stretch_point;
   float stretch_correction = (160.0f / kSampleRate) * delay;
   CONSTRAIN(stretch_correction, 1.0f, 2.1f);
 
-  float noise_amount_sqrt = non_linearity_amount > 0.75f
-      ? 4.0f * (non_linearity_amount - 0.75f)
-      : 0.0f;
-  float noise_amount = noise_amount_sqrt * noise_amount_sqrt * 0.1f;
-  float noise_filter = 0.06f + 0.94f * brightness * brightness;
+  const float noise_amount = parameters.noise_amount;
+  const float noise_filter = parameters.noise_filter;
+  const float bridge_curving = parameters.bridge_curving;
+  const float ap_gain = parameters.ap_gain;
+  const float stretch_factor = parameters.stretch_factor;
 
-  float bridge_curving_sqrt = non_linearity_amount;
-  float bridge_curving = bridge_curving_sqrt * bridge_curving_sqrt * 0.01f;
-
-  float ap_gain = -0.618f * non_linearity_amount / (0.15f + fabsf(non_linearity_amount));
-  const float stretch_factor = 0.408f - stretch_point * 0.308f;
-
-  // State.
+  // State, coefficients and constants in local variables: the compiler
+  // would read the members again after each sample written (the delay lines
+  // and the output could alias them), and the constants from the flash
+  // memory (see InRegister).
   float* const string = string_;
   float* const stretch = stretch_;
   size_t string_write_ptr = string_write_ptr_;
   size_t stretch_write_ptr = stretch_write_ptr_;
   float damping_s1 = iir_damping_filter_.state_1_;
   float damping_s2 = iir_damping_filter_.state_2_;
-  const float dc_blocker_pole = 1.0f - 20.0f / kSampleRate;
+  const float damping_r_plus_g = iir_damping_filter_.r_plus_g_;
+  const float damping_g_times_h = iir_damping_filter_.g_times_h_;
+  const float damping_g = iir_damping_filter_.g_;
+  const float dc_blocker_pole = InRegister(1.0f - 20.0f / kSampleRate);
   float dc_blocker_x = dc_blocker_x_;
   float dc_blocker_y = dc_blocker_y_;
   float dispersion_noise = dispersion_noise_;
@@ -174,28 +238,34 @@ void DuoString::ProcessInternal(
   float out_sample_0 = out_sample_[0];
   float out_sample_1 = out_sample_[1];
   uint32_t random_state = Random::state();
+  const DuoRandom random;
+  const float one = InRegister(1.0f);
+  const float half = InRegister(0.5f);
+  const float four = InRegister(4.0f);
+  const float twenty = InRegister(20.0f);
+  const float bridge_threshold = InRegister(0.025f);
 
   while (size--) {
     src_phase += src_ratio;
-    if (src_phase > 1.0f) {
-      src_phase -= 1.0f;
+    if (src_phase > one) {
+      src_phase -= one;
 
       float delay = delay_modulation.Next();
       float s = 0.0f;
 
       if (non_linearity == STRING_NON_LINEARITY_DISPERSION) {
-        float noise = DuoRandomFloat(&random_state) - 0.5f;
+        float noise = random.GetFloat(&random_state) - half;
         ONE_POLE(dispersion_noise, noise, noise_filter)
-        delay *= 1.0f + dispersion_noise * noise_amount;
+        delay *= one + dispersion_noise * noise_amount;
       } else {
-        delay *= 1.0f - curved_bridge * bridge_curving;
+        delay *= one - curved_bridge * bridge_curving;
       }
 
       bool hermite = true;
       if (non_linearity == STRING_NON_LINEARITY_DISPERSION) {
         float ap_delay = delay * stretch_point;
         float main_delay = delay - ap_delay * stretch_factor * stretch_correction;
-        if (ap_delay >= 4.0f && main_delay >= 4.0f) {
+        if (ap_delay >= four && main_delay >= four) {
           hermite = false;
           // DelayLine::Read.
           MAKE_INTEGRAL_FRACTIONAL(main_delay)
@@ -222,30 +292,39 @@ void DuoString::ProcessInternal(
         const float x0 = string[t & kDuoStringMask];
         const float x1 = string[(t + 1) & kDuoStringMask];
         const float x2 = string[(t + 2) & kDuoStringMask];
-        const float c = (x1 - xm1) * 0.5f;
+        const float c = (x1 - xm1) * half;
         const float v = x0 - x1;
         const float w = c + v;
-        const float a = w + v + (x2 - x0) * 0.5f;
+        const float a = w + v + (x2 - x0) * half;
         const float b_neg = w + a;
         const float f = delay_fractional;
         s = (((a * f) - b_neg) * f + c) * f + x0;
       }
 
       if (non_linearity == STRING_NON_LINEARITY_CURVED_BRIDGE) {
-        float value = fabsf(s) - 0.025f;
+        float value = fabsf(s) - bridge_threshold;
         float sign = s > 0.0f ? 1.0f : -1.5f;
         curved_bridge = (fabsf(value) + value) * sign;
       }
 
       s += *in;
-      CONSTRAIN(s, -20.0f, +20.0f);
+      // Same as CONSTRAIN(s, -20.0f, +20.0f), with one test in most cases.
+      if (fabsf(s) > twenty) {
+        s = s > 0.0f ? twenty : -twenty;
+      }
 
       // DCBlocker::Process.
       const float old_x = dc_blocker_x;
       dc_blocker_x = s;
       s = dc_blocker_y = dc_blocker_y * dc_blocker_pole + s - old_x;
 
-      s = iir_damping_filter_.Tick(s, &damping_s1, &damping_s2);
+      s = DuoLowPassSvf::Tick(
+          s,
+          damping_r_plus_g,
+          damping_g_times_h,
+          damping_g,
+          &damping_s1,
+          &damping_s2);
 
       // DelayLine::Write.
       string[string_write_ptr] = s;
@@ -283,28 +362,17 @@ void DuoStringVoice::Reset() {
 }
 
 void DuoStringVoice::Render(
+    const DuoStringParameters& parameters,
     bool sustain,
     bool trigger,
-    float accent,
     float f0,
-    float structure,
-    float brightness,
-    float damping,
     float* temp,
     float* out,
     size_t size) {
-  const float density = brightness * brightness;
-
-  brightness += 0.25f * accent * (1.0f - brightness);
-  damping += 0.25f * accent * (1.0f - damping);
-
   // Synthesize excitation signal.
   if (trigger || sustain) {
-    const float range = 72.0f;
     const float f = 4.0f * f0;
-    const float cutoff = min(
-        f * SemitonesToRatio((brightness * (2.0f - brightness) - 0.5f) * range),
-        0.499f);
+    const float cutoff = min(f * parameters.excitation_ratio, 0.499f);
     const float q = sustain ? 1.0f : 0.5f;
     remaining_noise_samples_ = static_cast<size_t>(1.0f / f0);
     // Same as excitation_filter_.set_f_q<FREQUENCY_DIRTY>(cutoff, q).
@@ -312,14 +380,17 @@ void DuoStringVoice::Render(
   }
 
   if (sustain) {
-    // Same as Dust(), with the division done once.
-    const float dust_f = 0.00005f + 0.99995f * density * density;
-    const float inv_dust_f = 1.0f / dust_f;
-    const float dust_gain = 8.0f - dust_f * 6.0f;
+    // Same as Dust().
+    const float dust_f = parameters.dust_f;
+    const float inv_dust_f = parameters.inv_dust_f;
+    const float dust_gain = parameters.dust_gain;
+    const float accent = parameters.accent;
+    const float zero = InRegister(0.0f);
     uint32_t random_state = Random::state();
+    const DuoRandom random;
     for (size_t i = 0; i < size; ++i) {
-      const float u = DuoRandomFloat(&random_state);
-      temp[i] = (u < dust_f ? u * inv_dust_f : 0.0f) * dust_gain * accent;
+      const float u = random.GetFloat(&random_state);
+      temp[i] = (u < dust_f ? u * inv_dust_f : zero) * dust_gain * accent;
     }
     Random::Seed(random_state);
   } else if (remaining_noise_samples_) {
@@ -327,9 +398,14 @@ void DuoStringVoice::Render(
     remaining_noise_samples_ -= noise_samples;
     size_t tail = size - noise_samples;
     float* start = temp;
+    uint32_t random_state = Random::state();
+    const DuoRandom random;
+    const float two = InRegister(2.0f);
+    const float one = InRegister(1.0f);
     while (noise_samples--) {
-      *start++ = 2.0f * Random::GetFloat() - 1.0f;
+      *start++ = two * random.GetFloat(&random_state) - one;
     }
+    Random::Seed(random_state);
     while (tail--) {
       *start++ = 0.0f;
     }
@@ -339,10 +415,7 @@ void DuoStringVoice::Render(
 
   excitation_filter_.Process(temp, size);
 
-  float non_linearity = structure < 0.24f
-      ? (structure - 0.24f) * 4.166f
-      : (structure > 0.26f ? (structure - 0.26f) * 1.35135f : 0.0f);
-  string_.Process(f0, non_linearity, brightness, damping, temp, out, size);
+  string_.Process(parameters, f0, temp, out, size);
 }
 
 }  // namespace plaits

@@ -31,6 +31,11 @@
 # make firmware   build/plaits/plaits.bin and plaits.hex.
 # make wav        build/plaits/plaits.wav, the firmware update file (numpy).
 # make bench      The CPU use of each model (see plaits/test/bench.mk).
+# make rig        The rig firmware's update file, build/plaits_rig/plaits_rig.wav
+#                 (numpy, for its updater), the same with the updater for the
+#                 bootloader, plaits_rig_install.wav, and its simulator,
+#                 build/host/plaits-sim-rig (see
+#                 docs/device-debugging-workflow.md).
 
 CCTR ?= cctr
 PYTHON ?= python3
@@ -50,7 +55,11 @@ wav:
 bench:
 	$(MAKE) -f plaits/test/bench.mk
 
+rig:
+	$(MAKE) -f plaits/test/host.mk build/host/plaits-sim-rig
+	$(MAKE) -f plaits/makefile TARGET=plaits_rig wav install_wav
+
 clean:
 	rm -rf build/
 
-.PHONY: test firmware wav bench clean
+.PHONY: test firmware wav bench rig clean

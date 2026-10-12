@@ -29,6 +29,10 @@
 
 #include "stmlib/stmlib.h"
 
+#ifdef PLAITS_RIG
+#include "plaits/rig/rig.h"
+#endif  // PLAITS_RIG
+
 #include "plaits/test/sim/sim_hardware.h"
 
 namespace plaits {
@@ -61,8 +65,20 @@ class CvAdc {
   }
 
   inline int16_t value(CvAdcChannel channel) const {
+#ifdef PLAITS_RIG
+    // The rig firmware: a reading given by a command.
+    if (rig.cv_overridden(channel)) {
+      return rig.cv_override(channel);
+    }
+#endif  // PLAITS_RIG
     return values_[channel];
   }
+
+#ifdef PLAITS_RIG
+  inline int16_t raw_value(CvAdcChannel channel) const {
+    return values_[channel];
+  }
+#endif  // PLAITS_RIG
   
   inline float float_value(CvAdcChannel channel) const {
     return static_cast<float>(value(channel)) / 32768.0f;

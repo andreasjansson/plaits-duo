@@ -73,8 +73,7 @@ SCRIPT
     87ms ..Y..Y..
    168ms .Y....Y.
    248ms Y......Y
-   328ms G.......
-
+   328ms Y.......
 ===
 leaving duo mode: two LEDs move from the edges to the center
 ===
@@ -88,35 +87,55 @@ release both
 trace all 600ms
 SCRIPT
 ---
-     0ms G.......
+     0ms Y.......
      7ms Y......Y
     87ms .Y....Y.
    167ms ..Y..Y..
    248ms ...YY...
    328ms G.......
-
 ===
-in duo mode, the LED of the model goes off twice briefly every 2 seconds
+in duo mode, the LED of the model is steady: yellow in the stereo layout, red in the split layout
 ===
 plaits-sim <<'SCRIPT'
 wait 500ms
 tap both
 wait 500ms
 trace 0 4.5s
+tap right
+trace 0 4.5s
 SCRIPT
 ---
-     0ms G
-   853ms .
-   913ms G
-  1033ms .
-  1094ms G
-  2906ms .
-  2967ms G
-  3087ms .
-  3147ms G
+     0ms Y
+     0ms R
 
 ===
-the left button cycles through the duo models in stereo (green), the right one in split mode (red)
+in the colour-blind mode (the right button held at power on), the stereo layout is a dim yellow: the original firmware shows green as yellow, and red as a faint yellow
+===
+plaits-sim <<'SCRIPT'
+wait 500ms
+reboot_holding right
+wait 500ms
+echo original, green and red:
+duty
+tap right
+duty
+echo duo, stereo and split:
+tap both
+wait 500ms
+duty
+tap right
+duty
+SCRIPT
+---
+original, green and red:
+duty Y100 . . . . . . .
+duty Y13 . . . . . . .
+duo, stereo and split:
+duty Y37 . . . . . . .
+duty Y13 . . . . . . .
+
+===
+the left button cycles through the duo models in stereo (yellow), the right one in split mode (red)
 ===
 plaits-sim <<'SCRIPT'
 wait 500ms
@@ -161,15 +180,15 @@ tap left
 leds
 SCRIPT
 ---
-leds G.......
-leds .G......
-leds ..G.....
-leds ...G....
-leds ....G...
-leds .....G..
-leds ......G.
-leds .......G
-leds G.......
+leds Y.......
+leds .Y......
+leds ..Y.....
+leds ...Y....
+leds ....Y...
+leds .....Y..
+leds ......Y.
+leds .......Y
+leds Y.......
 leds R.......
 leds .R......
 leds ..R.....
@@ -179,8 +198,7 @@ leds .....R..
 leds ......R.
 leds .......R
 leds R.......
-leds G.......
-
+leds Y.......
 ===
 the original firmware and duo mode each remember their selected model
 ===
@@ -215,19 +233,18 @@ SCRIPT
 original:
 leds ..R.....
 duo:
-leds G.......
-leds .....G..
+leds Y.......
+leds .....Y..
 original:
 leds ..R.....
 duo:
-leds .....G..
+leds .....Y..
 duo_mode 1
 engine 10
 duo_engine 5
 saved duo_mode 1 engine 10 duo_engine 5
 level calibration scale 0.000 offset 0.000
 color_blind 0
-
 ===
 in duo mode, holding the left button still shows the low-pass gate settings
 ===
@@ -249,8 +266,7 @@ SCRIPT
 ---
 leds ......YY
 leds YYYY...Y
-leds G.......
-
+leds Y.......
 ===
 in duo mode, holding the right button still shows the octave range
 ===
@@ -271,8 +287,7 @@ SCRIPT
 ---
 leds YYYYYYYY
 leds .....Y..
-leds G.......
-
+leds Y.......
 ===
 the MODEL CV is added to the selected model, with the same volts per model as in the original firmware
 ===
@@ -306,10 +321,10 @@ leds G..G....
 leds G......G
 leds R.......
 duo:
-leds GG......
-leds G..G....
-leds G......G
-leds G......G
+leds YY......
+leds Y..Y....
+leds Y......Y
+leds Y......Y
 duo, split:
 leds RR......
 leds R..R....

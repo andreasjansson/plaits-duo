@@ -26,12 +26,15 @@
 
 #include "plaits/drivers/audio_dac.h"
 #include "plaits/drivers/debug_pin.h"
-#include "plaits/drivers/debug_port.h"
 
 #include "plaits/dsp/dsp.h"
 #include "plaits/dsp/synthesizer.h"
 #include "plaits/settings.h"
 #include "plaits/ui.h"
+#ifdef PLAITS_RIG
+#include "plaits/rig/rig.h"
+#include "plaits/rig/telemetry.h"
+#endif  // PLAITS_RIG
 
 using namespace plaits;
 using namespace stmlib;
@@ -41,15 +44,17 @@ using namespace stmlib;
 const bool test_adc_noise = false;
 
 AudioDac audio_dac;
-DebugPort debug_port;
 Modulations modulations;
 Patch patch;
 Settings settings;
 Ui ui;
 Synthesizer synthesizer;
+#ifdef PLAITS_RIG
+Rig plaits::rig;
+Telemetry telemetry;
+#endif  // PLAITS_RIG
 
 char shared_buffer[16384];
-uint32_t test_ramp;
 
 // Default interrupt handlers.
 extern "C" {
@@ -71,9 +76,15 @@ void FillBuffer(AudioDac::Frame* output, size_t size) {
   TIC
 #endif  // PROFILE_INTERRUPT
 
+#ifdef PLAITS_RIG
+  const uint32_t start = DWT->CYCCNT;
+#endif  // PLAITS_RIG
   IWDG_ReloadCounter();
   
   ui.Poll();
+#ifdef PLAITS_RIG
+  const uint32_t poll = DWT->CYCCNT;
+#endif  // PLAITS_RIG
   
   if (test_adc_noise) {
     static float note_lp = 0.0f;
@@ -85,24 +96,24 @@ void FillBuffer(AudioDac::Frame* output, size_t size) {
       output->r = output->l = static_cast<int16_t>(cents * 4040.0f);
       ++output;
     }
-  } else if (ui.test_mode()) {
-    // 100 Hz ascending and descending ramps.
-    while (size--) {
-      output->l = ~test_ramp >> 16;
-      output->r = test_ramp >> 16;
-      test_ramp += 8947848;
-      ++output;
-    }
   } else {
     synthesizer.Render(patch, modulations, (Voice::Frame*)(output), size);
     ui.set_active_engine(synthesizer.active_engine(patch));
+    // While LEVEL is calibrated: the voltages it is calibrated with.
+    const int16_t calibration_output = ui.calibration_output();
+    if (calibration_output) {
+      for (size_t i = 0; i < size; ++i) {
+        output[i].l = output[i].r = calibration_output;
+      }
+    }
   }
   
-  if (debug_port.readable()) {
-    uint8_t command = debug_port.Read();
-    uint8_t response = ui.HandleFactoryTestingRequest(command);
-    debug_port.Write(response);
-  }
+#ifdef PLAITS_RIG
+  rig.Render((Voice::Frame*)(output), size, start);
+  telemetry.Process(
+      ui, patch, modulations, settings, start, poll, DWT->CYCCNT,
+      &output[0].r, 2, size);
+#endif  // PLAITS_RIG
   
 #ifdef PROFILE_INTERRUPT
   TOC
@@ -120,17 +131,21 @@ void Init() {
   volatile size_t counter = 1000000;
   while (counter--);
   
-  bool freshly_baked = !settings.Init();
-
-  if (freshly_baked) {
+  // The factory test mode of the original firmware (on a module without
+  // settings, its test jig sent commands over the serial port of the
+  // programming header) is left out, to make room in the flash memory.
+  settings.Init();
 #ifdef PROFILE_INTERRUPT
-    DebugPin::Init();
-#else
-    debug_port.Init();
+  DebugPin::Init();
 #endif  // PROFILE_INTERRUPT
-  }
 
+#ifdef PLAITS_RIG
+  rig.Init(&patch);
+#endif  // PLAITS_RIG
   ui.Init(&patch, &modulations, &settings);
+#ifdef PLAITS_RIG
+  telemetry.Init();
+#endif  // PLAITS_RIG
   
   audio_dac.Init(48000, kBlockSize);
 
@@ -140,5 +155,13 @@ void Init() {
 
 int main(void) {
   Init();
-  while (1) { }
+  while (1) {
+#ifdef PLAITS_RIG
+    if (rig.update_requested()) {
+      rig.StartUpdater();
+    } else if (rig.restart_requested()) {
+      rig.Restart();
+    }
+#endif  // PLAITS_RIG
+  }
 }

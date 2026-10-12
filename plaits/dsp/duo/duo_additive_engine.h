@@ -41,6 +41,7 @@
 #define PLAITS_DSP_DUO_DUO_ADDITIVE_ENGINE_H_
 
 #include "plaits/dsp/duo/duo_engine.h"
+#include "plaits/dsp/duo/duo_ram_table.h"
 #include "plaits/dsp/duo/harmonic_bank.h"
 
 namespace plaits {
@@ -71,6 +72,10 @@ class DuoAdditiveEngine : public DuoEngine {
       size_t num_harmonics);
 
   DuoHarmonicBank bank_[kNumDuoVoices];
+
+  // lut_sine, copied to RAM (read about 150 times per block).
+  DuoRamTable<float> sine_;
+  const float* sine_table_;
 
   float amplitudes_[kDuoNumHarmonics];
 

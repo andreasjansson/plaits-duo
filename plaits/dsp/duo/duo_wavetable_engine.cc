@@ -47,6 +47,7 @@
 #include "plaits/dsp/duo/duo_wavetable_engine.h"
 
 #include <algorithm>
+#include <cstring>
 
 #include "stmlib/dsp/parameter_interpolator.h"
 
@@ -61,6 +62,7 @@ namespace {
 
 const size_t kDuoTableSize = 256;
 const float kDuoTableSizeF = float(kDuoTableSize);
+const size_t kDuoWaveSize = kDuoTableSize + 4;
 
 // Same as Clamp() in wavetable_engine.cc.
 inline float DuoWTClamp(float x, float amount) {
@@ -71,17 +73,16 @@ inline float DuoWTClamp(float x, float amount) {
   return x;
 }
 
-inline const int16_t* DuoWTWave(int x, int y, int z) {
+inline int DuoWTWaveNumber(int x, int y, int z) {
   if (z >= 4) {
     z = 7 - z;
   }
   const int randomize = z == 3 ? 101 : 1;
-  const int wave = ((x + y * 8 + z * 64) * randomize) % 192;
-  return wav_integrated_waves + wave * (kDuoTableSize + 4);
+  return ((x + y * 8 + z * 64) * randomize) % 192;
 }
 
 // acc + (a * b[15:0]) >> 16, with a 48-bit intermediate product.
-inline int32_t Smlawb(int32_t a, int32_t b, int32_t acc) {
+inline int32_t Smlawb(int32_t a, uint32_t b, int32_t acc) {
 #ifdef TEST
   return acc + static_cast<int32_t>(
       (static_cast<int64_t>(a) * static_cast<int16_t>(b)) >> 16);
@@ -92,13 +93,34 @@ inline int32_t Smlawb(int32_t a, int32_t b, int32_t acc) {
 #endif  // TEST
 }
 
+// The same with b[31:16].
+inline int32_t Smlawt(int32_t a, uint32_t b, int32_t acc) {
+#ifdef TEST
+  return acc + static_cast<int32_t>(
+      (static_cast<int64_t>(a) * static_cast<int16_t>(b >> 16)) >> 16);
+#else
+  int32_t result;
+  __asm__("smlawt %0, %1, %2, %3" : "=r" (result) : "r" (a), "r" (b), "r" (acc));
+  return result;
+#endif  // TEST
+}
+
+// Two consecutive samples (the first in the low half), at any address: the
+// processor reads unaligned words.
+inline uint32_t ReadPair(const int16_t* p) {
+  uint32_t pair;
+  memcpy(&pair, p, sizeof(pair));
+  return pair;
+}
+
 }  // namespace
 
 void DuoWavetableVoice::Init() {
   phase_ = 0.0f;
   previous_f0_ = a0;
   reciprocal_f0_ = 1.0f / a0;
-  diff_out_.Init();
+  diff_lp_ = 0.0f;
+  diff_previous_ = 0.0f;
 }
 
 void DuoWavetableVoice::Render(
@@ -115,7 +137,10 @@ void DuoWavetableVoice::Render(
   const bool large_jump = f0 * reciprocal_f0 > 1.5f || \
       f0 * reciprocal_f0 < 0.66f;
   
+  // The state in local variables (out could point to the members).
   float phase = phase_;
+  float diff_lp = diff_lp_;
+  float diff_previous = diff_previous_;
   while (size--) {
     const float f0 = f0_modulation.Next();
     reciprocal_f0 = large_jump
@@ -137,13 +162,16 @@ void DuoWavetableVoice::Render(
     int32_t s1 = 0;
     int32_t s2 = 0;
     int32_t s3 = 0;
+    const int16_t* const* wave = blend->wave;
     for (int j = 0; j < 8; ++j) {
-      const int16_t* w = blend->wave[j] + p_integral;
+      const int16_t* w = wave[j] + p_integral;
+      const uint32_t w01 = ReadPair(w);
+      const uint32_t w23 = ReadPair(w + 2);
       const int32_t weight = blend->weight[j];
-      s0 = Smlawb(weight, w[0], s0);
-      s1 = Smlawb(weight, w[1], s1);
-      s2 = Smlawb(weight, w[2], s2);
-      s3 = Smlawb(weight, w[3], s3);
+      s0 = Smlawb(weight, w01, s0);
+      s1 = Smlawt(weight, w01, s1);
+      s2 = Smlawb(weight, w23, s2);
+      s3 = Smlawt(weight, w23, s3);
     }
     ++blend;
     
@@ -163,20 +191,33 @@ void DuoWavetableVoice::Render(
     if (restart) {
       // The differentiator starts from this sample, rather than from the
       // last one rendered long ago: no click.
-      diff_out_.Init();
-      diff_out_.Process(0.0f, mix);
+      diff_lp = 0.0f;
+      diff_previous = 0.0f;
+      ONE_POLE(diff_lp, mix - diff_previous, 0.0f);
+      diff_previous = mix;
       restart = false;
     }
-    *out++ = diff_out_.Process(cutoff, mix) * gain;
+    // Same as Differentiator::Process.
+    ONE_POLE(diff_lp, mix - diff_previous, cutoff);
+    diff_previous = mix;
+    *out++ = diff_lp * gain;
   }
   phase_ = phase;
   reciprocal_f0_ = reciprocal_f0;
+  diff_lp_ = diff_lp;
+  diff_previous_ = diff_previous;
 }
 
 void DuoWavetableEngine::Init(BufferAllocator* allocator) {
   for (int i = 0; i < kNumDuoVoices; ++i) {
     voice_[i].Init();
   }
+  cache_ = allocator->Allocate<int16_t>(8 * kDuoWaveSize);
+  if ((reinterpret_cast<uintptr_t>(cache_) | \
+       reinterpret_cast<uintptr_t>(wav_integrated_waves)) & 3) {
+    cache_ = NULL;  // Copied as 32-bit words.
+  }
+  fill(&cached_wave_[0], &cached_wave_[8], -1);
   
   x_lp_ = 0.0f;
   y_lp_ = 0.0f;
@@ -196,23 +237,113 @@ void DuoWavetableEngine::Init(BufferAllocator* allocator) {
 
 void DuoWavetableEngine::Reset() {
   second_voice_active_ = false;
+  // Another engine used the RAM.
+  fill(&cached_wave_[0], &cached_wave_[8], -1);
+  UpdateWaves(cell_ & 15, (cell_ >> 4) & 15, cell_ >> 8);
 }
 
 void DuoWavetableEngine::UpdateWaves(int x, int y, int z) {
   cell_ = x | (y << 4) | (z << 8);
-  wave_[0] = DuoWTWave(x, y, z);
-  wave_[1] = DuoWTWave(x + 1, y, z);
-  wave_[2] = DuoWTWave(x, y + 1, z);
-  wave_[3] = DuoWTWave(x + 1, y + 1, z);
-  wave_[4] = DuoWTWave(x, y, z + 1);
-  wave_[5] = DuoWTWave(x + 1, y, z + 1);
-  wave_[6] = DuoWTWave(x, y + 1, z + 1);
-  wave_[7] = DuoWTWave(x + 1, y + 1, z + 1);
+  // In the order of the blend: x, then y, then z.
+  for (int j = 0; j < 8; ++j) {
+    wave_number_[j] = DuoWTWaveNumber(x + (j & 1), y + ((j >> 1) & 1), z + (j >> 2));
+  }
+  if (!cache_) {
+    for (int j = 0; j < 8; ++j) {
+      wave_[j] = wav_integrated_waves + wave_number_[j] * kDuoWaveSize;
+    }
+    return;
+  }
+  // The slot of each wave of the cell: the one which has it, or one which
+  // has none of the waves of the cell (bit s of used: slot s has one).
+  int slot[8];
+  uint32_t used = 0;
+  for (int j = 0; j < 8; ++j) {
+    slot[j] = -1;
+    for (int s = 0; s < 8; ++s) {
+      if (cached_wave_[s] == wave_number_[j]) {
+        slot[j] = s;
+        used |= 1 << s;
+        break;
+      }
+    }
+  }
+  for (int j = 0; j < 8; ++j) {
+    if (slot[j] >= 0) {
+      continue;
+    }
+    // (Unless an earlier wave of the cell is the same.)
+    for (int k = 0; k < j; ++k) {
+      if (wave_number_[k] == wave_number_[j]) {
+        slot[j] = slot[k];
+        break;
+      }
+    }
+    if (slot[j] < 0) {
+      const int s = __builtin_ctz(~used);
+      cached_wave_[s] = wave_number_[j];
+      copied_[s] = 0;
+      used |= 1 << s;
+      slot[j] = s;
+    }
+  }
+  for (int j = 0; j < 8; ++j) {
+    const int s = slot[j];
+    wave_[j] = copied_[s] == static_cast<int16_t>(kDuoWaveSize)
+        ? cache_ + s * kDuoWaveSize
+        : wav_integrated_waves + wave_number_[j] * kDuoWaveSize;
+  }
+}
+
+// 8 words, which a struct copy moves with one LDM and one STM: much faster
+// than single words from the flash memory, whose reads stall the processor.
+struct DuoWords {
+  uint32_t word[8];
+};
+
+void DuoWavetableEngine::FillCache() {
+  if (!cache_) {
+    return;
+  }
+  // A wave per block (about 500 cycles), as 32-bit words (the waves start at
+  // a multiple of 4 bytes).
+  size_t budget = kDuoWaveSize;
+  for (int s = 0; s < 8 && budget; ++s) {
+    if (cached_wave_[s] < 0 || \
+        copied_[s] == static_cast<int16_t>(kDuoWaveSize)) {
+      continue;
+    }
+    size_t n = min(budget, kDuoWaveSize - copied_[s]);
+    const uint32_t* from = reinterpret_cast<const uint32_t*>(
+        wav_integrated_waves + cached_wave_[s] * kDuoWaveSize + copied_[s]);
+    uint32_t* to = reinterpret_cast<uint32_t*>(
+        cache_ + s * kDuoWaveSize + copied_[s]);
+    copied_[s] += n;
+    budget -= n;
+    size_t words = n / 2;
+    for (; words >= 8; words -= 8) {
+      *reinterpret_cast<DuoWords*>(to) = \
+          *reinterpret_cast<const DuoWords*>(from);
+      to += 8;
+      from += 8;
+    }
+    while (words--) {
+      *to++ = *from++;
+    }
+    if (copied_[s] == static_cast<int16_t>(kDuoWaveSize)) {
+      for (int j = 0; j < 8; ++j) {
+        if (wave_number_[j] == cached_wave_[s]) {
+          wave_[j] = cache_ + s * kDuoWaveSize;
+        }
+      }
+    }
+  }
 }
 
 void DuoWavetableEngine::ComputeBlend(
     const EngineParameters& parameters,
     DuoWavetableBlend* blend,
+    const int16_t* (*sets)[8],
     size_t size) {
   const float f0 = NoteToFrequency(parameters.note);
   
@@ -247,6 +378,12 @@ void DuoWavetableEngine::ComputeBlend(
   float y_lp = y_lp_;
   float z_lp = z_lp_;
   
+  // (Loops: std::copy would call memmove, which newlib-nano does a byte at a
+  // time.)
+  for (int j = 0; j < 8; ++j) {
+    (*sets)[j] = wave_[j];
+  }
+  const int16_t* const* set = *sets;
   for (size_t i = 0; i < size; ++i) {
     ONE_POLE(x_lp, x_modulation.Next(), lp_coefficient);
     ONE_POLE(y_lp, y_modulation.Next(), lp_coefficient);
@@ -263,6 +400,11 @@ void DuoWavetableEngine::ComputeBlend(
     const int cell = x_integral | (y_integral << 4) | (z_integral << 8);
     if (cell != cell_) {
       UpdateWaves(x_integral, y_integral, z_integral);
+      ++sets;
+      for (int j = 0; j < 8; ++j) {
+        (*sets)[j] = wave_[j];
+      }
+      set = *sets;
     }
     
     const float scale = 1073741824.0f;
@@ -274,9 +416,7 @@ void DuoWavetableEngine::ComputeBlend(
     const float y1z1 = y_fractional * z_fractional;
     
     DuoWavetableBlend* b = &blend[i];
-    for (int j = 0; j < 8; ++j) {
-      b->wave[j] = wave_[j];
-    }
+    b->wave = set;
     b->weight[0] = static_cast<int32_t>(x0 * y0z0);
     b->weight[1] = static_cast<int32_t>(x1 * y0z0);
     b->weight[2] = static_cast<int32_t>(x0 * y1z0);
@@ -301,7 +441,9 @@ void DuoWavetableEngine::Render(
     size_t size,
     bool* already_enveloped) {
   DuoWavetableBlend blend[kMaxBlockSize];
-  ComputeBlend(parameters[0], blend, size);
+  const int16_t* sets[kMaxBlockSize + 1][8];
+  FillCache();
+  ComputeBlend(parameters[0], blend, sets, size);
   
   // The first voice starts as in the original engine (with a click, in the
   // split layout), the second one without a click when LEVEL is patched.

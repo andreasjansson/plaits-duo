@@ -34,6 +34,7 @@
 #define PLAITS_DSP_DUO_DUO_WAVETABLE_ENGINE_H_
 
 #include "plaits/dsp/duo/duo_engine.h"
+#include "plaits/dsp/duo/duo_ram_table.h"
 #include "plaits/dsp/oscillator/wavetable_oscillator.h"
 
 namespace plaits {
@@ -41,7 +42,7 @@ namespace plaits {
 // The 8 waves surrounding the current position in the wavetable, and their
 // weights (sum = 2^30).
 struct DuoWavetableBlend {
-  const int16_t* wave[8];
+  const int16_t* const* wave;
   int32_t weight[8];
 };
 
@@ -63,7 +64,9 @@ class DuoWavetableVoice {
   float phase_;
   float previous_f0_;
   float reciprocal_f0_;
-  Differentiator diff_out_;
+  // State of the differentiator (see Differentiator).
+  float diff_lp_;
+  float diff_previous_;
 
   DISALLOW_COPY_AND_ASSIGN(DuoWavetableVoice);
 };
@@ -85,11 +88,15 @@ class DuoWavetableEngine : public DuoEngine {
       bool* already_enveloped);
 
  private:
+  // The waves of each sample are one of the sets of waves (from sets[0]):
+  // there is a new set when the position moves to another cell.
   void ComputeBlend(
       const EngineParameters& parameters,
       DuoWavetableBlend* blend,
+      const int16_t* (*sets)[8],
       size_t size);
   void UpdateWaves(int x, int y, int z);
+  void FillCache();
 
   DuoWavetableVoice voice_[kNumDuoVoices];
   bool second_voice_active_;
@@ -109,6 +116,13 @@ class DuoWavetableEngine : public DuoEngine {
 
   int cell_;
   const int16_t* wave_[8];
+  int16_t wave_number_[8];
+
+  // The waves of the cell, copied to RAM (the memory the engines share) a
+  // little at every block: the voices read them about 770 times per block.
+  int16_t* cache_;  // 8 waves (NULL: no room).
+  int16_t cached_wave_[8];  // The number of the wave in each slot, -1: none.
+  int16_t copied_[8];  // Its samples copied so far (as pairs).
 
 
   DISALLOW_COPY_AND_ASSIGN(DuoWavetableEngine);

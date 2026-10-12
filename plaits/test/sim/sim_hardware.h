@@ -28,9 +28,16 @@
 //
 // CV inputs are modeled as on the module: an inverting input stage scales
 // the jack voltage and adds an offset before the ADC. The gains and offsets
-// are consistent with the default calibration data in plaits/settings.cc.
-// Unpatched jacks with a switch are connected to the normalization probe,
-// which outputs 2V when high.
+// are consistent with the default calibration data in plaits/settings.cc,
+// for the nominal 3.3V reference of the ADC (vdda), which also supplies the
+// op-amps of the input stages (their output stays swing volts away from the
+// supply rails), and for an ADC without gain error (adc_gain multiplies its
+// readings from 0V: STM32F373's SDADCs read 2.4 to 3.1% high, according to
+// its datasheet). Unpatched jacks with a switch are connected to the
+// normalization probe, which outputs 2V when high.
+//
+// A cable can also carry the voltage of OUT or AUX into a CV input (8V at
+// full scale).
 
 #ifndef PLAITS_TEST_SIM_SIM_HARDWARE_H_
 #define PLAITS_TEST_SIM_SIM_HARDWARE_H_
@@ -48,7 +55,11 @@ const int kNumSimLeds = 8;
 struct Hardware {
   float cv_volts[kNumCvInputs];  // In CvAdcChannel order.
   bool patched[kNumCvInputs];
+  int patched_output[kNumCvInputs];  // 1: OUT, 2: AUX, 0: cv_volts.
   float cv_gain_error[kNumCvInputs];  // Multiplies the gain of the input.
+  float vdda;
+  float adc_gain;
+  float swing;
   float pot[kNumPots];  // In PotsAdcChannel order, 0 to 1.
   bool switch_down[kNumSwitches];
   bool probe_output;
@@ -62,6 +73,10 @@ void ResetHardware();
 
 // 16-bit ADC reading of a CV input.
 int16_t CvAdcValue(int channel);
+
+// The voltages of the outputs, after rendering a block (samples as the DAC
+// receives them).
+void SetOutputs(int16_t main, int16_t aux);
 
 }  // namespace sim
 }  // namespace plaits

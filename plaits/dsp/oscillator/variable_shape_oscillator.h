@@ -85,7 +85,13 @@ class VariableShapeOscillator {
     stmlib::ParameterInterpolator waveshape_modulation(
         &waveshape_, waveshape, size);
 
+    // The state in local variables through the block (the compiler would
+    // otherwise write the members at every sample: out could point to them).
     float next_sample = next_sample_;
+    float master_phase = master_phase_;
+    float slave_phase = slave_phase_;
+    float previous_pw = previous_pw_;
+    bool high = high_;
     
     while (size--) {
       bool reset = false;
@@ -105,19 +111,19 @@ class VariableShapeOscillator {
       const float slope_down = 1.0f / (1.0f - pw);
 
       if (enable_sync) {
-        master_phase_ += master_frequency;
-        if (master_phase_ >= 1.0f) {
-          master_phase_ -= 1.0f;
-          reset_time = master_phase_ / master_frequency;
+        master_phase += master_frequency;
+        if (master_phase >= 1.0f) {
+          master_phase -= 1.0f;
+          reset_time = master_phase / master_frequency;
       
-          float slave_phase_at_reset = slave_phase_ + \
+          float slave_phase_at_reset = slave_phase + \
               (1.0f - reset_time) * slave_frequency;
           reset = true;
           if (slave_phase_at_reset >= 1.0f) {
             slave_phase_at_reset -= 1.0f;
             transition_during_reset = true;
           }
-          if (!high_ && slave_phase_at_reset >= pw) {
+          if (!high && slave_phase_at_reset >= pw) {
             transition_during_reset = true;
           }
           float value = ComputeNaiveSample(
@@ -132,13 +138,13 @@ class VariableShapeOscillator {
         }
       }
       
-      slave_phase_ += slave_frequency;
+      slave_phase += slave_frequency;
       while (transition_during_reset || !reset) {
-        if (!high_) {
-          if (slave_phase_ < pw) {
+        if (!high) {
+          if (slave_phase < pw) {
             break;
           }
-          float t = (slave_phase_ - pw) / (previous_pw_ - pw + slave_frequency);
+          float t = (slave_phase - pw) / (previous_pw - pw + slave_frequency);
           float triangle_step = (slope_up + slope_down) * slave_frequency;
           triangle_step *= triangle_amount;
           
@@ -146,15 +152,15 @@ class VariableShapeOscillator {
           next_sample += square_amount * stmlib::NextBlepSample(t);
           this_sample -= triangle_step * stmlib::ThisIntegratedBlepSample(t);
           next_sample -= triangle_step * stmlib::NextIntegratedBlepSample(t);
-          high_ = true;
+          high = true;
         }
       
-        if (high_) {
-          if (slave_phase_ < 1.0f) {
+        if (high) {
+          if (slave_phase < 1.0f) {
             break;
           }
-          slave_phase_ -= 1.0f;
-          float t = slave_phase_ / slave_frequency;
+          slave_phase -= 1.0f;
+          float t = slave_phase / slave_frequency;
           float triangle_step = (slope_up + slope_down) * slave_frequency;
           triangle_step *= triangle_amount;
 
@@ -162,28 +168,32 @@ class VariableShapeOscillator {
           next_sample -= (1.0f - triangle_amount) * stmlib::NextBlepSample(t);
           this_sample += triangle_step * stmlib::ThisIntegratedBlepSample(t);
           next_sample += triangle_step * stmlib::NextIntegratedBlepSample(t);
-          high_ = false;
+          high = false;
         }
       }
     
       if (enable_sync && reset) {
-        slave_phase_ = reset_time * slave_frequency;
-        high_ = false;
+        slave_phase = reset_time * slave_frequency;
+        high = false;
       }
     
       next_sample += ComputeNaiveSample(
-          slave_phase_,
+          slave_phase,
           pw,
           slope_up,
           slope_down,
           triangle_amount,
           square_amount);
-      previous_pw_ = pw;
+      previous_pw = pw;
 
       *out++ = (2.0f * this_sample - 1.0f);
     }
     
     next_sample_ = next_sample;
+    master_phase_ = master_phase;
+    slave_phase_ = slave_phase;
+    previous_pw_ = previous_pw;
+    high_ = high;
   }
 
 

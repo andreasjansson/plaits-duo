@@ -52,14 +52,12 @@ gain_error level 1.03
 press both
 wait 2.1s
 release both
+patch v_oct main
+patch level main
 wait 500ms
-cv level 1
-wait 300ms
 tap left
-wait 500ms
-cv level 3
-wait 300ms
-tap left
+unpatch v_oct
+unpatch level
 wait 500ms
 tap left
 tap left
@@ -77,7 +75,7 @@ duo_mode 1
 engine 0
 duo_engine 11
 saved duo_mode 1 engine 0 duo_engine 11
-level calibration scale -58.250 offset 47.571
+level calibration scale -58.252 offset 47.568
 color_blind 0
 
 ===

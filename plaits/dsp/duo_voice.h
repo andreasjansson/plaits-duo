@@ -49,6 +49,7 @@
 
 #include "plaits/dsp/duo/duo_additive_engine.h"
 #include "plaits/dsp/duo/duo_engine.h"
+#include "plaits/dsp/duo/duo_fm_engine.h"
 #include "plaits/dsp/duo/duo_original_engine.h"
 #include "plaits/dsp/duo/duo_speech_engine.h"
 #include "plaits/dsp/duo/duo_stereo.h"
@@ -108,7 +109,7 @@ class DuoVoice {
 
   DuoVirtualAnalogEngine virtual_analog_engine_;
   DuoWaveshapingEngine waveshaping_engine_;
-  DuoOriginalEngine<FMEngine> fm_engine_;
+  DuoFMEngine fm_engine_;
   DuoOriginalEngine<GrainEngine> grain_engine_;
   DuoAdditiveEngine additive_engine_;
   DuoWavetableEngine wavetable_engine_;

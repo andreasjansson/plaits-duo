@@ -1,0 +1,86 @@
+{
+  "_wiring": "Plaits OUT -> audio interface input 1, AUX -> input 2 (line level, gain at minimum). oC (FX Rig app, USB to the Mac): A -> passive mult (or stackable cable) -> V/OCT and LEVEL; jack B -> LEVEL instead of the mult for the tour (role level); jack G -> TRIGGER when an experiment asks for it; C -> MODEL (re-patch it after flashing: MODEL is the update input); D -> HARMONICS; jack H -> FM (role debug: the commands of the rig firmware, see plaits/rig/rig.h); audio interface output 2 (as the Mac numbers them; the user patched the jack it reaches) -> MODEL (the updates, from the rig firmware's updater; MODEL CV from the oC is then unused) instead of oC jack C; E -> TIMBRE; F -> MORPH. Knobs: FREQUENCY at about 9 o'clock, HARMONICS at 12 o'clock, TIMBRE fully counterclockwise, MORPH at about 11 o'clock (a clean pitch for the classic waveforms); TIMBRE and MORPH attenuverters fully clockwise, FM attenuverter centered.",
+  "audio": {
+    "in_device": "Scarlett 8i6",
+    "in": [
+      1,
+      2
+    ],
+    "sr": 48000,
+    "update_out": 2
+  },
+  "oc": {
+    "pitch": "E",
+    "level": "F",
+    "trigger": "C",
+    "model": "G",
+    "harmonics": "H",
+    "timbre": "A",
+    "morph": "B",
+    "debug": "D"
+  },
+  "jacks": {
+    "pitch": [
+      "v_oct",
+      "level"
+    ],
+    "trigger": [
+      "trigger"
+    ],
+    "model": [
+      "model"
+    ],
+    "harmonics": [
+      "harmonics"
+    ],
+    "timbre": [
+      "timbre"
+    ],
+    "morph": [
+      "morph"
+    ],
+    "level": [],
+    "debug": [
+      "fm"
+    ]
+  },
+  "cv_bounds": [
+    -2.0,
+    8.0
+  ],
+  "model_volts": 0.3236,
+  "virtual": {
+    "_": "The virtual module: plaits-sim-rig, with a typical ADC (typical: its gain error, -2.7% in STM32F373's datasheet, which --hw can replace), calibrated as at the factory (the original firmware's V/OCT calibration, with exact 1V and 3V, which also measures the 0V readings of the other inputs), then with the knobs as in _wiring. TRIGGER is unplugged until an experiment asks for it.",
+    "detached": [
+      "trigger"
+    ],
+    "setup": [
+      "knob frequency 0.25",
+      "knob harmonics 0.5",
+      "knob timbre 0",
+      "knob morph 0.4",
+      "knob timbre_cv 1",
+      "knob morph_cv 1",
+      "knob fm_cv 0.5",
+      "wait 500ms"
+    ],
+    "factory": [
+      "wait 500ms",
+      "press both",
+      "wait 2100ms",
+      "release both",
+      "cv v_oct 1",
+      "wait 300ms",
+      "tap left",
+      "cv v_oct 3",
+      "wait 300ms",
+      "tap left",
+      "unpatch v_oct",
+      "wait 300ms"
+    ],
+    "typical": [
+      "hw adc_gain 1.027"
+    ]
+  },
+  "_oc": "FX Rig's channels (A-H in its software). On the oC used for this rig, the two rows of jacks are swapped against them: the jack labelled A is channel E, B is F, C is G, D is H, E is A, F is B, G is C, H is D (measured 2026-10-12). The wiring above uses the jack labels."
+}

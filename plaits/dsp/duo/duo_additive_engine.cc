@@ -54,6 +54,8 @@ inline float RotationRate(int k) {
 }
 
 void DuoAdditiveEngine::Init(BufferAllocator* allocator) {
+  sine_.Init(allocator, lut_sine, LUT_SINE_SIZE);
+  sine_table_ = lut_sine;
   fill(&amplitudes_[0], &amplitudes_[kDuoNumHarmonics], 0.0f);
   for (int i = 0; i < kNumDuoVoices; ++i) {
     bank_[i].Init();
@@ -99,7 +101,7 @@ void DuoAdditiveEngine::UpdateRotations() {
         phase -= 1.0f;
       }
       psi = 0.0397887f * static_cast<float>(k) * \
-          Interpolate(lut_sine, phase, 1024.0f);
+          Interpolate(sine_table_, phase, 1024.0f);
       if (psi < 0.0f) {
         psi += 1.0f;
       }
@@ -116,7 +118,7 @@ void DuoAdditiveEngine::UpdateRotations() {
     // quarter of a cycle later in the table.
     const float index = psi * 1024.0f;
     MAKE_INTEGRAL_FRACTIONAL(index)
-    const float* table = &lut_sine[index_integral];
+    const float* table = &sine_table_[index_integral];
     const float sine = 0.5f * (
         table[0] + (table[1] - table[0]) * index_fractional);
     const float cosine = 0.25f * (
@@ -134,7 +136,7 @@ void DuoAdditiveEngine::UpdateRotations() {
 }
 
 void DuoAdditiveEngine::Reset() {
-
+  sine_.Reset();
 }
 
 // Same as AdditiveEngine::UpdateAmplitudes, with integer harmonics (and the
@@ -164,7 +166,7 @@ void DuoAdditiveEngine::UpdateAmplitudes(
     float b = (0.25f + order * bumps) * 1024.0f;
     const int32_t b_integral = static_cast<int32_t>(b);
     const float b_fractional = b - static_cast<float>(b_integral);
-    const float* sine = &lut_sine[b_integral & 1023];
+    const float* sine = &sine_table_[b_integral & 1023];
     float bump_factor = 1.0f + (sine[0] + (sine[1] - sine[0]) * b_fractional);
 
     gain *= bump_factor;
@@ -190,6 +192,11 @@ void DuoAdditiveEngine::Render(
     float* aux,
     size_t size,
     bool* already_enveloped) {
+  sine_table_ = sine_.Update();
+  for (int i = 0; i < kNumDuoVoices; ++i) {
+    bank_[i].set_sine_table(sine_table_);
+  }
+
   // The spectral envelope only depends on TIMBRE, MORPH and HARMONICS, which
   // are shared by the two voices.
   const EngineParameters& p = parameters[0];

@@ -27,6 +27,10 @@
 
 #include "plaits/dsp/duo_voice.h"
 
+#ifdef PLAITS_RIG
+#include "plaits/rig/rig.h"
+#endif  // PLAITS_RIG
+
 #include <algorithm>
 
 namespace plaits {
@@ -129,6 +133,10 @@ void DuoVoice::Render(
     const Modulations& modulations,
     Voice::Frame* frames,
     size_t size) {
+#ifdef PLAITS_RIG
+  rig.Mark(-1);
+#endif  // PLAITS_RIG
+
   // Trigger, LPG, internal envelope.
 
   // Delay trigger by 1ms to deal with sequencers or MIDI interfaces whose
@@ -153,6 +161,13 @@ void DuoVoice::Render(
   if (!modulations.trigger_patched) {
     engine_cv_ = modulations.engine;
   }
+#ifdef PLAITS_RIG
+  if (rig.engine_forced()) {
+    // The model given by a command (with TRIGGER patched, the MODEL CV
+    // sampled at the last trigger, or at power on, would be added).
+    engine_cv_ = 0.0f;
+  }
+#endif  // PLAITS_RIG
 
   // Model selection. The CV keeps the same volts-per-model as in the
   // original firmware (where it spans 16 models).
@@ -267,10 +282,16 @@ void DuoVoice::Render(
 
   bool already_enveloped = pp_s.already_enveloped;
   const DuoStereoLayout layout = e->stereo_layout;
+#ifdef PLAITS_RIG
+  rig.Mark(RIG_SECTION_CONTROL);
+#endif  // PLAITS_RIG
   e->Render(
       p, num_voices, stereo && layout != DUO_STEREO_VOICES,
       out_buffer_, aux_buffer_, size,
       &already_enveloped);
+#ifdef PLAITS_RIG
+  rig.Mark(RIG_SECTION_ENGINE);
+#endif  // PLAITS_RIG
   if (mute_blocks_) {
     --mute_blocks_;
     if (stereo) {
@@ -292,8 +313,15 @@ void DuoVoice::Render(
     }
     stereo_.Process(out_buffer_, aux_buffer_, size);
   } else if (num_voices == 1) {
-    copy(&out_buffer_[0], &out_buffer_[size], &aux_buffer_[0]);
+    // (A loop: std::copy would call memmove, which newlib-nano does a byte at
+    // a time.)
+    for (size_t i = 0; i < size; ++i) {
+      aux_buffer_[i] = out_buffer_[i];
+    }
   }
+#ifdef PLAITS_RIG
+  rig.Mark(RIG_SECTION_STEREO);
+#endif  // PLAITS_RIG
 
   bool lpg_bypass = already_enveloped || !modulations.trigger_patched;
 
@@ -338,6 +366,9 @@ void DuoVoice::Render(
       &frames->aux,
       size,
       2);
+#ifdef PLAITS_RIG
+  rig.Mark(RIG_SECTION_OUTPUT);
+#endif  // PLAITS_RIG
 }
 
 }  // namespace plaits

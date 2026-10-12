@@ -70,10 +70,15 @@ class DuoLowPassSvf {
   }
 
   inline void Process(float* in_out, size_t size) {
+    // The coefficients in local variables: the compiler would read them
+    // again after each sample written (in_out could point to them).
+    const float r_plus_g = r_plus_g_;
+    const float g_times_h = g_times_h_;
+    const float g = g_;
     float s1 = state_1_;
     float s2 = state_2_;
     for (size_t i = 0; i < size; ++i) {
-      in_out[i] = Tick(in_out[i], &s1, &s2);
+      in_out[i] = Tick(in_out[i], r_plus_g, g_times_h, g, &s1, &s2);
     }
     state_1_ = s1;
     state_2_ = s2;
@@ -81,11 +86,17 @@ class DuoLowPassSvf {
 
   // Same as stmlib::Svf::Process<FILTER_MODE_LOW_PASS>, without computing
   // the high-pass output.
-  inline float Tick(float in, float* s1, float* s2) const {
-    const float g_hp = (in - r_plus_g_ * *s1 - *s2) * g_times_h_;
+  static inline float Tick(
+      float in,
+      float r_plus_g,
+      float g_times_h,
+      float g,
+      float* s1,
+      float* s2) {
+    const float g_hp = (in - r_plus_g * *s1 - *s2) * g_times_h;
     const float bp = g_hp + *s1;
     *s1 = bp + g_hp;
-    const float g_bp = g_ * bp;
+    const float g_bp = g * bp;
     const float lp = g_bp + *s2;
     *s2 = lp + g_bp;
     return lp;
@@ -101,6 +112,34 @@ class DuoLowPassSvf {
   DISALLOW_COPY_AND_ASSIGN(DuoLowPassSvf);
 };
 
+// The settings of a block which do not depend on the pitch, the same for all
+// the strings: computed once (the same computations as in StringVoice::Render
+// and String::ProcessInternal).
+struct DuoStringParameters {
+  void Compute(float accent, float structure, float brightness, float damping);
+
+  float accent;
+  // The excitation.
+  float brightness;  // With the accent.
+  float excitation_ratio;  // Of the cutoff of the filter to 4 * f0.
+  float dust_f;
+  float inv_dust_f;
+  float dust_gain;
+  // The string.
+  bool curved_bridge;  // Otherwise: dispersion.
+  float non_linearity_amount;
+  float damping_ratio;  // Of the cutoff of the damping filter to f0.
+  bool infinite_decay;
+  float to_infinite;
+  float damping_compensation;
+  float stretch_point;
+  float noise_amount;
+  float noise_filter;
+  float bridge_curving;
+  float ap_gain;
+  float stretch_factor;
+};
+
 class DuoString {
  public:
   DuoString() { }
@@ -109,10 +148,8 @@ class DuoString {
   void Init(stmlib::BufferAllocator* allocator);
   void Reset();
   void Process(
+      const DuoStringParameters& parameters,
       float f0,
-      float non_linearity_amount,
-      float brightness,
-      float damping,
       const float* in,
       float* out,
       size_t size);
@@ -120,10 +157,8 @@ class DuoString {
  private:
   template<StringNonLinearity non_linearity>
   void ProcessInternal(
+      const DuoStringParameters& parameters,
       float f0,
-      float non_linearity_amount,
-      float brightness,
-      float damping,
       const float* in,
       float* out,
       size_t size);
@@ -157,13 +192,10 @@ class DuoStringVoice {
 
   // Same as StringVoice::Render, without the exciter output.
   void Render(
+      const DuoStringParameters& parameters,
       bool sustain,
       bool trigger,
-      float accent,
       float f0,
-      float structure,
-      float brightness,
-      float damping,
       float* temp,
       float* out,
       size_t size);

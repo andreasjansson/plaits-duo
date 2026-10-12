@@ -28,6 +28,11 @@
 
 #include "plaits/ui.h"
 
+
+#ifdef PLAITS_RIG
+#include "plaits/rig/rig.h"
+#endif  // PLAITS_RIG
+
 #include <algorithm>
 
 #include "stmlib/dsp/dsp.h"
@@ -43,12 +48,6 @@ static const int32_t kLongPressTime = 2000;
 // In ms (the LEDs are updated at 1kHz).
 static const int kDuoAnimationStepDuration = 80;
 static const int kDuoAnimationDuration = 4 * kDuoAnimationStepDuration;
-
-// Semitones per unit of (calibrated) LEVEL CV, when the LEVEL input has not
-// been calibrated for pitch. The LEVEL input has the same input stage as the
-// V/OCT input, whose nominal scale is 60 semitones per unit of ADC reading,
-// and the default scale of the LEVEL channel is 0.6 per unit.
-static const float kDefaultLevelNoteScale = 60.0f / 0.6f;
 
 #define ENABLE_LFO_MODE
 
@@ -112,8 +111,11 @@ void Ui::Init(Patch* patch, Modulations* modulations, Settings* settings) {
   pitch_lp_ = 0.0f;
   pitch_lp_calibration_ = 0.0f;
   level_pitch_lp_ = 0.0f;
-  level_pitch_lp_calibration_ = 0.0f;
   calibrating_level_ = false;
+  calibration_phase_ = 0;
+  calibration_output_ = 0;
+  fill(&calibration_reading_[0][0], &calibration_reading_[0][0] + 4, 0.0f);
+  fill(&calibration_note_[0], &calibration_note_[2], 0.0f);
   duo_animation_ = 0;
 }
 
@@ -122,6 +124,7 @@ void Ui::LoadState() {
   patch_->engine = state.engine;
   patch_->duo_mode = state.duo_mode;
   patch_->duo_engine = state.duo_engine;
+  UpdateLevelNoteScale();
   patch_->lpg_colour = static_cast<float>(state.lpg_colour) / 256.0f;
   patch_->decay = static_cast<float>(state.decay) / 256.0f;
   octave_ = static_cast<float>(state.octave) / 256.0f;
@@ -155,6 +158,14 @@ void Ui::UpdateLEDs() {
         LedColor green = settings_->state().color_blind == 1
             ? LED_COLOR_YELLOW
             : LED_COLOR_GREEN;
+        if (patch_->duo_mode) {
+          // In duo mode, the models of the stereo layout are yellow (a dim
+          // yellow in the colour-blind mode, which shows green as yellow),
+          // those of the split layout red.
+          green = settings_->state().color_blind == 1
+              ? (pwm_counter < 6 ? LED_COLOR_YELLOW : LED_COLOR_OFF)
+              : LED_COLOR_YELLOW;
+        }
         const int selected_engine = patch_->duo_mode
             ? patch_->duo_engine
             : patch_->engine;
@@ -167,12 +178,6 @@ void Ui::UpdateLEDs() {
           int distance = patch_->duo_mode ? step : 3 - step;
           leds_.set(3 - distance, LED_COLOR_YELLOW);
           leds_.set(4 + distance, LED_COLOR_YELLOW);
-          break;
-        }
-        
-        // In duo mode, the LED goes off twice briefly every 2 seconds.
-        int t = pwm_counter_ & 2047;
-        if (patch_->duo_mode && (t < 60 || (t >= 180 && t < 240))) {
           break;
         }
         
@@ -247,18 +252,6 @@ void Ui::UpdateLEDs() {
         for (int i = 0; i < kNumLEDs; ++i) {
           leds_.set(i, LED_COLOR_RED);
         }
-      }
-      break;
-
-    case UI_MODE_TEST:
-    int color = (pwm_counter_ >> 10) % 3;
-      for (int i = 0; i < kNumLEDs; ++i) {
-        leds_.set(
-            i, pwm_counter > ((triangle + (i * 2)) & 15)
-                ? (color == 0
-                   ? LED_COLOR_GREEN
-                   : (color == 1 ? LED_COLOR_YELLOW : LED_COLOR_RED))
-                : LED_COLOR_OFF);
       }
       break;
   }
@@ -406,7 +399,6 @@ void Ui::ReadSwitches() {
       }
       break;
 
-    case UI_MODE_TEST:
     case UI_MODE_ERROR:
       for (int i = 0; i < SWITCH_LAST; ++i) {
         if (switches_.just_pressed(Switch(i))) {
@@ -453,6 +445,9 @@ void Ui::DetectNormalization() {
       destination[i] = normalization_detection_mismatches_[i] >= 2;
       normalization_detection_mismatches_[i] = 0;
     }
+#ifdef PLAITS_RIG
+    rig.ApplyPatched(modulations_);
+#endif  // PLAITS_RIG
   }
 
   normalization_probe_state_ = 1103515245 * normalization_probe_state_ + 12345;
@@ -460,6 +455,13 @@ void Ui::DetectNormalization() {
 }
 
 void Ui::Poll() {
+#ifdef PLAITS_RIG
+  int16_t readings[CV_ADC_CHANNEL_LAST];
+  for (int i = 0; i < CV_ADC_CHANNEL_LAST; ++i) {
+    readings[i] = cv_adc_.raw_value(CvAdcChannel(i));
+  }
+  rig.ProcessCommands(readings);
+#endif  // PLAITS_RIG
   for (int i = 0; i < POTS_ADC_CHANNEL_LAST; ++i) {
     pots_[i].ProcessControlRate(pots_adc_.float_value(PotsAdcChannel(i)));
   }
@@ -469,6 +471,12 @@ void Ui::Poll() {
     destination[i] = settings_->calibration_data(i).Transform(
         cv_adc_.float_value(CvAdcChannel(i)));
   }
+#ifdef PLAITS_RIG
+  if (rig.engine_forced()) {
+    // The model given by a command, without the MODEL CV.
+    modulations_->engine = 0.0f;
+  }
+#endif  // PLAITS_RIG
   
   ONE_POLE(pitch_lp_, modulations_->note, 0.7f);
   ONE_POLE(
@@ -480,10 +488,12 @@ void Ui::Poll() {
   const PersistentData& p = settings_->persistent_data();
   const float level_note = p.level_note_scale != 0.0f
       ? level * p.level_note_scale + p.level_note_offset
-      : modulations_->level * kDefaultLevelNoteScale;
+      : modulations_->level * level_note_scale_;
   ONE_POLE(level_pitch_lp_, level_note, 0.7f);
-  ONE_POLE(level_pitch_lp_calibration_, level, 0.1f);
   modulations_->level_note = level_pitch_lp_;
+  if (calibration_output_) {
+    TrackCalibrationOutput();
+  }
   
   ui_task_ = (ui_task_ + 1) % 4;
   switch (ui_task_) {
@@ -526,117 +536,6 @@ void Ui::Poll() {
     patch_->note = 60.0f + transposition_ * 48.0f;
   }
 #endif  // ENABLE_LFO_MODE
-}
-
-void Ui::StartCalibration(bool level) {
-  mode_ = UI_MODE_CALIBRATION_C1;
-  calibrating_level_ = level;
-  normalization_probe_.Disable();
-}
-
-void Ui::CalibrateC1() {
-  if (calibrating_level_) {
-    // 1V is patched into LEVEL. The offsets of the other channels are left
-    // untouched.
-    cv_c1_ = level_pitch_lp_calibration_;
-    mode_ = UI_MODE_CALIBRATION_C3;
-    return;
-  }
-
-  // Acquire offsets for all channels.
-  for (int i = 0; i < CV_ADC_CHANNEL_LAST; ++i) {
-    if (i != CV_ADC_CHANNEL_V_OCT) {
-      ChannelCalibrationData* c = settings_->mutable_calibration_data(i);
-      c->offset = -cv_adc_.float_value(CvAdcChannel(i)) * c->scale;
-    }
-  }
-  cv_c1_ = pitch_lp_calibration_;
-  mode_ = UI_MODE_CALIBRATION_C3;
-}
-
-void Ui::CalibrateC3() {
-  // (-33/100.0*1 + -33/140.0 * -10.0) / 3.3 * 2.0 - 1 = 0.228
-  float c1 = cv_c1_;
-
-  // (-33/100.0*1 + -33/140.0 * -10.0) / 3.3 * 2.0 - 1 = -0.171
-  float c3 = calibrating_level_
-      ? level_pitch_lp_calibration_
-      : pitch_lp_calibration_;
-  float delta = c3 - c1;
-  
-  if (calibrating_level_) {
-    if (delta > -0.6f && delta < -0.2f) {
-      PersistentData* p = settings_->mutable_persistent_data();
-      p->level_note_scale = 24.0f / delta;
-      p->level_note_offset = 12.0f - p->level_note_scale * c1;
-      settings_->SavePersistentData();
-      mode_ = UI_MODE_NORMAL;
-    } else {
-      mode_ = UI_MODE_ERROR;
-    }
-  } else if (delta > -0.6f && delta < -0.2f) {
-    ChannelCalibrationData* c = settings_->mutable_calibration_data(
-        CV_ADC_CHANNEL_V_OCT);
-    c->scale = 24.0f / delta;
-    c->offset = 12.0f - c->scale * c1;
-    settings_->SavePersistentData();
-    mode_ = UI_MODE_NORMAL;
-  } else {
-    mode_ = UI_MODE_ERROR;
-  }
-  normalization_probe_.Init();
-}
-
-uint8_t Ui::HandleFactoryTestingRequest(uint8_t command) {
-  uint8_t argument = command & 0x1f;
-  command = command >> 5;
-  uint8_t reply = 0;
-  switch (command) {
-    case FACTORY_TESTING_READ_POT:
-      reply = pots_adc_.value(PotsAdcChannel(argument)) >> 8;
-      break;
-      
-    case FACTORY_TESTING_READ_CV:
-      reply = (cv_adc_.value(CvAdcChannel(argument)) + 32768) >> 8;
-      break;
-    
-    case FACTORY_TESTING_READ_NORMALIZATION:
-      reply = (&modulations_->frequency_patched)[argument] ? 0 : 255;
-      break;      
-    
-    case FACTORY_TESTING_READ_GATE:
-      reply = switches_.pressed(Switch(argument));
-      break;
-      
-    case FACTORY_TESTING_GENERATE_TEST_SIGNAL:
-      if (argument) {
-        mode_ = UI_MODE_TEST;
-      } else {
-        mode_ = UI_MODE_NORMAL;
-      }
-      break;
-      
-    case FACTORY_TESTING_CALIBRATE:
-      {
-        switch (argument) {
-          case 0:
-            patch_->engine = 0;
-            StartCalibration(false);
-            break;
-          
-          case 1:
-            CalibrateC1();
-            break;
-          
-          case 2:
-            CalibrateC3();
-            SaveState();
-            break;
-        }
-      }
-      break;
-  }
-  return reply;
 }
 
 }  // namespace plaits

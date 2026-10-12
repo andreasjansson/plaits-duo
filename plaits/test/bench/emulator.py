@@ -43,8 +43,9 @@
 #
 # Usage: emulator.py BENCHMARK.elf RESULTS.json [--profile TAG]
 #
-# RESULTS.json receives the cycle counts of the blocks for each tag, and the
-# deepest stack use. --profile prints the functions in which the slowest
+# RESULTS.json receives the cycle counts of the blocks for each tag, the
+# deepest stack use, and the hash of the output if the benchmark has one
+# (bench_output_hash). --profile prints the functions in which the slowest
 # block of the given tag (without its lower 8 bits) spends its time.
 
 import bisect
@@ -105,6 +106,7 @@ class Block(object):
   def __init__(self, uc, address, size):
     self.end = address + size
     self.execution = 0
+    self.literals = 0
     previous_is_memory = False
     code = bytes(uc.mem_read(address, size))
     for instruction in disassembler.disasm(code, address):
@@ -116,6 +118,7 @@ class Block(object):
       previous_is_memory = is_memory
       if is_memory and '[pc' in instruction.op_str:
         cycles += WAIT_STATES  # Constant in flash.
+        self.literals += 1
       self.execution += cycles
     self.fetch = ((size + 7) // 8) * (1 + WAIT_STATES)
 
@@ -143,7 +146,19 @@ def Run(path, profile_tag=None):
         (s['st_value'] & ~1, s['st_size'], s.name)
         for s in symbols.iter_symbols()
         if s['st_info']['type'] == 'STT_FUNC' and s['st_size'] > 0)
+    objects = sorted(
+        (s['st_value'], s['st_size'], s.name)
+        for s in symbols.iter_symbols()
+        if s['st_info']['type'] == 'STT_OBJECT' and s['st_size'] > 0)
   function_starts = [f[0] for f in functions]
+  object_starts = [o[0] for o in objects]
+
+  def ObjectAt(address):
+    i = bisect.bisect_right(object_starts, address) - 1
+    if i >= 0 and address < objects[i][0] + objects[i][1]:
+      return objects[i][2]
+    return '?'
+
 
   def FunctionAt(address):
     i = bisect.bisect_right(function_starts, address) - 1
@@ -157,7 +172,9 @@ def Run(path, profile_tag=None):
   blocks = {}
   results = collections.defaultdict(list)
   current_profile = collections.Counter()
-  slowest = [0, None]
+  current_reads = collections.Counter()
+  current_literals = collections.Counter()
+  slowest = [0, None, None, None]
 
   def OnBlock(uc, address, size, user_data):
     b = blocks.get(address)
@@ -172,6 +189,8 @@ def Run(path, profile_tag=None):
       state['lowest_sp'] = sp
     if profile_tag is not None:
       current_profile[FunctionAt(address)] += cycles
+      if b.literals:
+        current_literals[FunctionAt(address)] += b.literals
 
   def OnMark(uc, address, size, user_data):
     tag = uc.reg_read(UC_ARM_REG_R0)
@@ -183,11 +202,17 @@ def Run(path, profile_tag=None):
           cycles > slowest[0]:
         slowest[0] = cycles
         slowest[1] = dict(current_profile)
+        slowest[2] = dict(current_reads)
+        slowest[3] = dict(current_literals)
     current_profile.clear()
+    current_reads.clear()
+    current_literals.clear()
     state['last_mark'] = now
 
   def ReadConstant(uc, offset, size, user_data):
     state['cycles'] += WAIT_STATES
+    if profile_tag is not None:
+      current_reads[ObjectAt(CONSTANTS_BASE + offset)] += 1
     return int.from_bytes(constants[offset:offset + size], 'little')
 
   def WriteConstant(uc, offset, size, value, user_data):
@@ -212,9 +237,24 @@ def Run(path, profile_tag=None):
         capture_output=True, text=True).stdout.split('\n')
     for (name, cycles), d in zip(names, demangled):
       print('%7d %s' % (cycles, d[:110]))
-  return {
+    reads = sorted(slowest[2].items(), key=lambda x: -x[1])[:10]
+    print('reads of constant data (flash): %d' % sum(slowest[2].values()))
+    for name, n in reads:
+      print('%7d %s' % (n, name))
+    literals = sorted(slowest[3].items(), key=lambda x: -x[1])[:8]
+    print('literal pool loads (flash): %d' % sum(slowest[3].values()))
+    for name, n in literals:
+      print('%7d %s' % (n, name))
+  output = {
       'blocks': dict((str(tag), v) for tag, v in results.items()),
       'stack': RAM_TOP - state['lowest_sp']}
+  # The hash of the benchmark's output, if it computes one (bench_duo.cc).
+  if 'bench_output_hash' in addresses:
+    address = addresses['bench_output_hash']
+    data = bytes(uc.mem_read(address, 2 * 16 * 4))
+    output['output_hash'] = [
+        int.from_bytes(data[i:i + 4], 'little') for i in range(0, len(data), 4)]
+  return output
 
 
 if __name__ == '__main__':

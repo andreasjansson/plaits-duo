@@ -45,6 +45,9 @@ class FMEngine : public Engine {
       float* aux,
       size_t size,
       bool* already_enveloped);
+
+  // The sine table (lut_sine, or its copy in RAM, in duo mode).
+  inline void set_sine_table(const float* sine) { sine_ = sine; }
   
  private:
   inline float SinePM(uint32_t phase, float fm) const;
@@ -61,6 +64,8 @@ class FMEngine : public Engine {
   
   float sub_fir_;
   float carrier_fir_;
+
+  const float* sine_;
   
   DISALLOW_COPY_AND_ASSIGN(FMEngine);
 };

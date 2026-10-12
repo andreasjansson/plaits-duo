@@ -31,6 +31,10 @@
 
 #include "plaits/test/sim/sim_hardware.h"
 
+#ifdef PLAITS_RIG
+#include "plaits/rig/rig.h"
+#endif  // PLAITS_RIG
+
 namespace plaits {
 
 enum Switch {
@@ -55,6 +59,11 @@ class Switches {
     for (int i = 0; i < SWITCH_LAST; ++i) {
       switch_state_[i] = (switch_state_[i] << 1) | \
           (sim::hardware.switch_down[i] ? 0 : 1);
+#ifdef PLAITS_RIG
+      if (rig.button_forced(i)) {
+        switch_state_[i] &= ~1;
+      }
+#endif  // PLAITS_RIG
     }
   }
   

@@ -42,6 +42,8 @@
 
 namespace plaits {
 
+class Telemetry;
+
 const int kNumNormalizedChannels = 5;
 const int kProbeSequenceDuration = 32;
 
@@ -51,17 +53,7 @@ enum UiMode {
   UI_MODE_DISPLAY_OCTAVE,
   UI_MODE_CALIBRATION_C1,
   UI_MODE_CALIBRATION_C3,
-  UI_MODE_TEST,
   UI_MODE_ERROR
-};
-
-enum FactoryTestingCommand {
-  FACTORY_TESTING_READ_POT,
-  FACTORY_TESTING_READ_CV,
-  FACTORY_TESTING_READ_GATE,
-  FACTORY_TESTING_GENERATE_TEST_SIGNAL,
-  FACTORY_TESTING_CALIBRATE,
-  FACTORY_TESTING_READ_NORMALIZATION,
 };
 
 class Ui {
@@ -77,12 +69,12 @@ class Ui {
     active_engine_ = active_engine;
   }
   
-  inline bool test_mode() const {
-    return mode_ == UI_MODE_TEST;
+  // While LEVEL is calibrated, the module outputs two voltages in turn on
+  // OUT and AUX: the sample to output instead of the voice (0: none).
+  inline int16_t calibration_output() const {
+    return calibration_output_;
   }
 
-  uint8_t HandleFactoryTestingRequest(uint8_t command);
-  
  private:
   void UpdateLEDs();
   void ReadSwitches();
@@ -97,6 +89,9 @@ class Ui {
   void StartCalibration(bool level);
   void CalibrateC1();
   void CalibrateC3();
+  void TrackCalibrationOutput();
+  void EndLevelCalibration(UiMode mode);
+  void UpdateLevelNoteScale();
 
   void RealignPots() {
     pots_[POTS_ADC_CHANNEL_TIMBRE_POT].Realign();
@@ -124,8 +119,19 @@ class Ui {
   
   // LEVEL used as a pitch input in duo mode.
   float level_pitch_lp_;
-  float level_pitch_lp_calibration_;
   bool calibrating_level_;
+  
+  // Semitones per unit of LEVEL CV, until LEVEL is calibrated (see
+  // Ui::UpdateLevelNoteScale).
+  float level_note_scale_;
+  
+  // The calibration of LEVEL against V/OCT: the phase of the alternation
+  // between the two output voltages, the readings of V/OCT and LEVEL at each
+  // voltage (averaged), and the notes of the two voltages read by V/OCT.
+  int calibration_phase_;
+  int16_t calibration_output_;
+  float calibration_reading_[2][2];
+  float calibration_note_[2];
   
   // LED animation played when entering or leaving duo mode.
   int duo_animation_;
@@ -145,6 +151,10 @@ class Ui {
   float cv_c1_;  // For calibration
   
   static const CvAdcChannel normalized_channels_[kNumNormalizedChannels];
+  
+  // The rig firmware reports the readings and the calibration of the inputs
+  // (see plaits/rig/telemetry.h).
+  friend class Telemetry;
     
   DISALLOW_COPY_AND_ASSIGN(Ui);
 };

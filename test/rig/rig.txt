@@ -1,0 +1,145 @@
+===
+the rig firmware (duo mode, with telemetry on AUX and commands on FM) builds, fits below its updater, and leaves room for the stack
+%skip(needs the ARM toolchain: set TOOLCHAIN_PATH) if: ! test -x "${TOOLCHAIN_PATH}bin/arm-none-eabi-gcc"
+===
+cd "$CCTR_TEST_PATH/../.."
+make -s -f plaits/makefile TOOLCHAIN_PATH="$TOOLCHAIN_PATH" TARGET=plaits_rig > /dev/null 2>&1
+plaits/test/memory_use build/plaits_rig/plaits_rig.elf 208
+---
+flash: {{ flash }} bytes free
+stack: {{ stack }} bytes
+---
+where
+* flash > 4096
+* stack > 4096
+
+===
+the updater of the rig firmware fits in the last 16k of the flash memory; the update files (the rig firmware for the updater, and with the updater for the bootloader) decode, with the bootloader's code, to their images
+%skip(needs the ARM toolchain and numpy) if: ! test -x "${TOOLCHAIN_PATH}bin/arm-none-eabi-gcc" || ! ${PYTHON:-python3} -c "import numpy"
+===
+cd "$CCTR_TEST_PATH/../.."
+make -s -f plaits/makefile TOOLCHAIN_PATH="$TOOLCHAIN_PATH" PYTHON="${PYTHON:-python3}" TARGET=plaits_rig wav install_wav > /dev/null 2>&1
+"${TOOLCHAIN_PATH}bin/arm-none-eabi-size" -A build/plaits_updater/plaits_updater.elf | awk '/^\.isr_vector|^\.text|^\.data/ { s += $2 } END { print "updater:", 16384 - s, "bytes free" }'
+for f in plaits_rig plaits_rig_install; do
+  plaits-update-decoder build/plaits_rig/$f.wav "$CCTR_WORK_DIR/$f.bin" > /dev/null
+  "${PYTHON:-python3}" - build/plaits_rig/$f.bin "$CCTR_WORK_DIR/$f.bin" <<'PYTHON'
+import sys
+image, received = (open(p, "rb").read() for p in sys.argv[1:])
+same = received[:len(image)] == image and set(received[len(image):]) <= {0xff}
+print(sys.argv[1].split("/")[-1], "decodes to its image" if same else "DIFFERS")
+PYTHON
+done
+"${PYTHON:-python3}" -c "
+d = open('build/plaits_rig/plaits_rig_install.bin', 'rb').read()
+u = open('build/plaits_updater/plaits_updater.bin', 'rb').read()
+print('the updater at 0x%08x' % (0x08008000 + d.find(u)))"
+---
+updater: {{ free }} bytes free
+plaits_rig.bin decodes to its image
+plaits_rig_install.bin decodes to its image
+the updater at 0x0803c000
+---
+where
+* free > 1024
+
+===
+the telemetry of the rig firmware (version 4), decoded by the rig from a recording of AUX: a frame every 2 seconds, with the module's state and the readings of V/OCT and LEVEL
+%skip(needs numpy and scipy) if: ! ${PYTHON:-python3} -c "import numpy, scipy"
+===
+printf 'wait 500ms\ntap both\ntap right\ncv v_oct 1\ncv level 2\nwait 3s\nclear\nwait 4.5s\nsave %s/rig.wav\n' "$CCTR_WORK_DIR" | plaits-sim-rig
+cd "$CCTR_TEST_PATH/../.."
+"${PYTHON:-python3}" - "$CCTR_WORK_DIR/rig.wav" <<'PYTHON'
+import sys
+sys.path.insert(0, "rig/host")
+import scipy.io.wavfile as wavfile
+import telemetry
+sr, y = wavfile.read(sys.argv[1])
+frames, rate = telemetry.decode(y[:, 1] / 32768.0, sr, return_rate=True)
+f = frames[-1]
+print(f"{len(frames)} frames (version {f.version}), {rate:.1f} samples per second, margin {min(g.margin for g in frames):.2f}")
+print(f"duo mode {f.duo_mode}, {f.layout} layout, model {f.duo_engine & 7}")
+print("patched:", ",".join(j for j in telemetry.PATCHED if f.is_patched(j)))
+print(f"V/OCT {f.cv_mean(0):.4f} (sd {f.cv_std(0):.4f}), LEVEL {f.cv_mean(1):.4f} (sd {f.cv_std(1):.4f})")
+print(f"voices: {f.note:.2f} and {f.level_note:.2f} semitones")
+PYTHON
+---
+{{ n }} frames (version 4), 47872.0 samples per second, margin 1.00
+duo mode 1, split layout, model 0
+patched: level
+V/OCT 0.2285 (sd 0.0000), LEVEL 0.4167 (sd 0.0000)
+voices: 12.00 and 24.00 semitones
+---
+where
+* n >= 2
+
+===
+the commands of the rig on FM: the model, the knobs, the CV readings, the patched inputs and the debug instrument, as the module's telemetry reports them and its outputs show
+%skip(needs numpy and scipy) if: ! ${PYTHON:-python3} -c "import numpy, scipy"
+===
+cd "$CCTR_TEST_PATH/../.."
+"${PYTHON:-python3}" - <<'PYTHON'
+import sys
+sys.path.insert(0, "rig/host")
+import numpy as np
+import control, pitch, rigio
+rig = rigio.VirtualRig(rigio.load_config(), sim="build/host/plaits-sim-rig")
+ctl = control.Control(rig)
+ctl.telemetry(0)
+first = ctl.frame(check=False)
+ctl.engine(6, "split")
+ctl.knob("harmonics", 0.25)
+ctl.patched(trigger=False, level=True)
+ctl.cv("v_oct", 0.125)
+f = ctl.frame()
+print(f"{f.commands - first.commands} commands, {f.command_errors} errors")
+print(f"{f.layout} layout, model {f.duo_engine & 7}, harmonics knob {f.pots[1] / 65535:.3f}")
+print("patched:", ",".join(j for j in ("fm", "timbre", "morph", "trigger", "level") if f.is_patched(j)))
+print(f"V/OCT reads {f.cv[1] / 32768:.4f}")
+ctl.cv("v_oct", None)
+ctl.instrument("sine", 1000, 8000, 4000)
+cap = rig.capture(0.5)
+rms = np.sqrt(np.mean(cap.y ** 2, 0)) * 32768
+print(f"sine: {pitch.frequency(cap.out, cap.sr):.1f}Hz, {round(rms[0], -1):.0f} and {round(rms[1], -1):.0f} rms")
+ctl.instrument("constant", 1000, -2000)
+cap = rig.capture(0.2)
+print(f"constant: {cap.out[-1] * 32768:.0f} and {cap.aux[-1] * 32768:.0f} (the output stage inverts)")
+ctl.instrument("off")
+f = ctl.frame()
+print(f"instrument {f.instrument}, no telemetry until asked: {len(control.telemetry.decode(rig.capture(2.5).aux, rig.sr))} frames")
+rig.oc.glitch = 1.0   # a 1V spike in each symbol
+ctl.knob("harmonics", 0.75)
+f = ctl.frame()
+print(f"with glitches: harmonics knob {f.pots[1] / 65535:.3f}, {f.command_errors} errors")
+rig.close()
+PYTHON
+---
+5 commands, 0 errors
+split layout, model 6, harmonics knob 0.250
+patched: timbre,morph,level
+V/OCT reads 0.1250
+sine: 1000.0Hz, 5660 and 2830 rms
+constant: -1000 and 2000 (the output stage inverts)
+instrument 0, no telemetry until asked: 0 frames
+with glitches: harmonics knob 0.750, 0 errors
+
+===
+the state of the updater, on AUX in the same code as the telemetry, decoded by the rig
+%skip(needs numpy and scipy) if: ! ${PYTHON:-python3} -c "import numpy, scipy"
+===
+cd "$CCTR_TEST_PATH/../.."
+"${PYTHON:-python3}" - <<'PYTHON'
+import sys
+sys.path.insert(0, "rig/host")
+import numpy as np
+import telemetry
+# As UpdaterStatus and StatusSample in plaits/rig/updater/updater.cc.
+words = [telemetry.MAGIC_UPDATER, (1 << 16) | 8, 1, 123, 15, 2, 16000]
+words.append(telemetry._checksum(words))
+bits = [0] * 32 + [(w >> (31 - i)) & 1 for w in words for i in range(32)]
+x = np.concatenate([[1, 1, 1, -1, -1, -1] if b else [-1, -1, -1, 1, 1, 1] for b in bits])
+x = np.concatenate([np.zeros(1000), x * 0.3, np.zeros(1000)])
+frames = telemetry.decode(x, telemetry.MODULE_RATE, kind=None)
+print(len(frames), frames[0].kind, frames[0].summary())
+PYTHON
+---
+1 updater updater: receiving, 123 packets, 15 pages written, 2 errors, peak 16000

@@ -31,6 +31,10 @@
 
 #include "stmlib/stmlib.h"
 
+#ifdef PLAITS_RIG
+#include "plaits/rig/rig.h"
+#endif  // PLAITS_RIG
+
 namespace plaits {
 
 enum PotsAdcChannel {
@@ -53,6 +57,12 @@ class PotsAdc {
   void Convert();
 
   inline int32_t value(PotsAdcChannel channel) const {
+#ifdef PLAITS_RIG
+    // The rig firmware: a position given by a command.
+    if (rig.pot_overridden(channel)) {
+      return rig.pot_override(channel);
+    }
+#endif  // PLAITS_RIG
     return static_cast<int32_t>(values_[channel]);
   }
   

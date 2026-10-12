@@ -68,10 +68,14 @@ class DuoHarmonicBank {
   void Init() {
     phase_ = 0.0f;
     frequency_ = 0.0f;
+    sine_ = lut_sine;
     for (int i = 0; i < kDuoNumHarmonics; ++i) {
       amplitude_[i] = 0.0f;
     }
   }
+
+  // The sine table (lut_sine, or its copy in RAM).
+  inline void set_sine_table(const float* sine) { sine_ = sine; }
 
   // Writes the sum of the harmonics to out.
   void Render(
@@ -211,7 +215,7 @@ class DuoHarmonicBank {
       // in the table) is interpolated at the same position.
       const float index = phase * 1024.0f;
       MAKE_INTEGRAL_FRACTIONAL(index)
-      const float* table = &lut_sine[index_integral];
+      const float* table = &sine_[index_integral];
       two_x[i] = 2.0f * (table[0] + (table[1] - table[0]) * index_fractional);
       if (sine) {
         sine[i] = -(table[256] + (table[257] - table[256]) * index_fractional);
@@ -333,6 +337,7 @@ class DuoHarmonicBank {
   }
 
   // Oscillator state.
+  const float* sine_;
   float phase_;
 
   // For interpolation of parameters.

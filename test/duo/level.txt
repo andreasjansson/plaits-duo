@@ -47,7 +47,36 @@ where
 * abs(n3 - n1 - 24.72) < 0.05
 
 ===
-holding the two buttons in duo mode calibrates LEVEL, with LED 7: patch 1V and press the left button, then 3V
+until it is calibrated, LEVEL reads volts as V/OCT does: the gain error of the converter, which the two inputs share, is corrected by the factory calibration of V/OCT
+===
+# A converter reading 2.7% high (STM32F373's datasheet: 2.4 to 3.1%), and the
+# factory calibration of V/OCT, with 1V and 3V (in the original firmware).
+cat > module.txt <<'SCRIPT'
+hw adc_gain 1.027
+press both
+wait 2.1s
+release both
+cv v_oct 1
+wait 300ms
+tap left
+cv v_oct 3
+wait 300ms
+tap left
+unpatch v_oct
+tap both
+tap right
+SCRIPT
+echo "1V: $(./aux_note module.txt 1)"
+echo "3V: $(./aux_note module.txt 3)"
+---
+1V: {{ n1 }}
+3V: {{ n3 }}
+---
+where
+* abs(n3 - n1 - 24) < 0.05
+
+===
+holding the two buttons in duo mode calibrates LEVEL against V/OCT, with LED 7: OUT patched into V/OCT and the left button pressed, then OUT into LEVEL
 ===
 plaits-sim <<'SCRIPT'
 wait 500ms
@@ -57,32 +86,75 @@ gain_error level 1.03
 press both
 wait 2.1s
 release both
-echo waiting for 1V:
+echo waiting for V/OCT:
 leds 500ms
-cv level 1
-wait 300ms
+patch v_oct main
+wait 500ms
 tap left
-echo waiting for 3V:
+echo waiting for LEVEL:
 leds 500ms
-cv level 3
-wait 300ms
+unpatch v_oct
+patch level main
+wait 500ms
 tap left
 echo done:
 leds
 state
 SCRIPT
 ---
-waiting for 1V:
+waiting for V/OCT:
 leds .......G
-waiting for 3V:
+waiting for LEVEL:
 leds .......Y
 done:
-leds G.......
+leds Y.......
 duo_mode 1
 engine 0
 duo_engine 0
 saved duo_mode 1 engine 0 duo_engine 0
-level calibration scale -58.250 offset 47.571
+level calibration scale -58.252 offset 47.568
+color_blind 0
+
+===
+while LEVEL is calibrated, OUT and AUX carry two voltages in turn (about 0.5V and 4.4V at 8V full scale), half of the time each
+===
+printf 'wait 500ms\ntap both\npress both\nwait 2.1s\nrelease both\nclear\nwait 1s\n' | plaits-sim -o calibration.wav
+plaits-analyze levels calibration.wav
+---
+main: rms={{ rms }} peak={{ peak }}
+aux: rms={{ aux_rms }} peak={{ aux_peak }}
+correlation: 1.000
+---
+where
+* aux_rms == rms
+* aux_peak == peak
+* abs(peak * 8 - 4.39) < 0.01
+* abs(rms ^ 2 - ((2000 / 32768) ^ 2 + (18000 / 32768) ^ 2) / 2) < 0.002
+
+===
+with a stackable cable (OUT into V/OCT and LEVEL), one press calibrates LEVEL
+===
+plaits-sim <<'SCRIPT' | grep -v saved
+wait 500ms
+tap both
+wait 300ms
+gain_error level 1.03
+press both
+wait 2.1s
+release both
+patch v_oct main
+patch level main
+wait 500ms
+tap left
+leds
+state
+SCRIPT
+---
+leds Y.......
+duo_mode 1
+engine 0
+duo_engine 0
+level calibration scale -58.252 offset 47.568
 color_blind 0
 
 ===
@@ -95,14 +167,14 @@ gain_error level 1.03
 press both
 wait 2.1s
 release both
+patch v_oct main
 wait 500ms
-cv level 1
-wait 300ms
 tap left
+unpatch v_oct
+patch level main
 wait 500ms
-cv level 3
-wait 300ms
 tap left
+unpatch level
 reboot
 wait 500ms
 tap right
@@ -117,7 +189,7 @@ where
 * abs(n3 - n1 - 24) < 0.05
 
 ===
-a calibration with wrong voltages (1V and 1V) is rejected (all LEDs red), and the previous calibration is kept
+a calibration is rejected (all LEDs red) when V/OCT does not get the voltages of OUT at the first press, or LEVEL at the second, and the previous calibration is kept
 ===
 plaits-sim <<'SCRIPT' | grep -v saved
 wait 500ms
@@ -127,33 +199,44 @@ gain_error level 1.03
 press both
 wait 2.1s
 release both
+patch v_oct main
+patch level main
 wait 500ms
-cv level 1
-wait 300ms
 tap left
-wait 500ms
-cv level 3
-wait 300ms
-tap left
-wait 500ms
+unpatch v_oct
+unpatch level
+echo nothing in V/OCT:
 press both
 wait 2.1s
 release both
 wait 500ms
-cv level 1
-wait 300ms
 tap left
+leds 500ms
+tap left
+echo nothing in LEVEL:
+patch v_oct main
+press both
+wait 2.1s
+release both
+wait 500ms
+tap left
+leds 500ms
+unpatch v_oct
 wait 500ms
 tap left
 leds 500ms
 state
 SCRIPT
 ---
+nothing in V/OCT:
+leds RRRRRRRR
+nothing in LEVEL:
+leds .......Y
 leds RRRRRRRR
 duo_mode 1
 engine 0
 duo_engine 0
-level calibration scale -58.250 offset 47.571
+level calibration scale -58.252 offset 47.568
 color_blind 0
 
 ===
@@ -167,14 +250,11 @@ gain_error level 1.03
 press both
 wait 2.1s
 release both
+patch v_oct main
+patch level main
 wait 500ms
-cv level 1
-wait 300ms
 tap left
-wait 500ms
-cv level 3
-wait 300ms
-tap left
+unpatch level
 wait 500ms
 tap both
 wait 300ms
@@ -199,5 +279,5 @@ leds G.......
 duo_mode 0
 engine 0
 duo_engine 0
-level calibration scale -58.250 offset 47.571
+level calibration scale -58.252 offset 47.568
 color_blind 0

@@ -89,23 +89,25 @@ class DualVariableSawOscillator {
     stmlib::ParameterInterpolator waveshape_modulation(
         &waveshape_, waveshape, size);
 
-    // The state is kept in local variables through the block.
+    // The state is kept in local variables through the block, and the
+    // constants in registers (see InRegister).
     State a = state_[0];
     State b = state_[1];
     float previous_pw = previous_pw_;
+    Constants c;
     while (size--) {
       const float pw = pwm.Next();
       const float waveshape = waveshape_modulation.Next();
       const float triangle_amount = waveshape;
-      const float notch_amount = 1.0f - waveshape;
-      const float slope_up = 1.0f / (pw);
-      const float slope_down = 1.0f / (1.0f - pw);
+      const float notch_amount = c.one - waveshape;
+      const float slope_up = c.one / (pw);
+      const float slope_down = c.one / (c.one - pw);
       *out_a++ = Tick(
           &a, fm_a.Next(), pw, previous_pw, slope_up, slope_down,
-          triangle_amount, notch_amount);
+          triangle_amount, notch_amount, c);
       *out_b++ = Tick(
           &b, fm_b.Next(), pw, previous_pw, slope_up, slope_down,
-          triangle_amount, notch_amount);
+          triangle_amount, notch_amount, c);
       previous_pw = pw;
     }
     state_[0] = a;
@@ -120,6 +122,18 @@ class DualVariableSawOscillator {
     bool high;
   };
 
+  struct Constants {
+    Constants()
+        : zero(InRegister(0.0f)),
+          one(InRegister(1.0f)),
+          one_plus_notch_depth(InRegister(1.0f + kVariableSawNotchDepth)),
+          scale(InRegister(1.0f / (1.0f + kVariableSawNotchDepth))) { }
+    const float zero;
+    const float one;
+    const float one_plus_notch_depth;
+    const float scale;
+  };
+
   // One iteration of VariableSawOscillator::Render.
   static inline __attribute__((always_inline)) float Tick(
       State* state,
@@ -129,26 +143,27 @@ class DualVariableSawOscillator {
       float slope_up,
       float slope_down,
       float triangle_amount,
-      float notch_amount) {
+      float notch_amount,
+      const Constants& c) {
     float this_sample = state->next_sample;
-    float next_sample = 0.0f;
+    float next_sample = c.zero;
     float phase = state->phase + frequency;
 
     if (!state->high && phase >= pw) {
       const float triangle_step = (slope_up + slope_down) * frequency * \
           triangle_amount;
-      const float notch = (kVariableSawNotchDepth + 1.0f - pw) * notch_amount;
+      const float notch = (c.one_plus_notch_depth - pw) * notch_amount;
       const float t = (phase - pw) / (previous_pw - pw + frequency);
       this_sample += notch * stmlib::ThisBlepSample(t);
       next_sample += notch * stmlib::NextBlepSample(t);
       this_sample -= triangle_step * stmlib::ThisIntegratedBlepSample(t);
       next_sample -= triangle_step * stmlib::NextIntegratedBlepSample(t);
       state->high = true;
-    } else if (phase >= 1.0f) {
-      phase -= 1.0f;
+    } else if (phase >= c.one) {
+      phase -= c.one;
       const float triangle_step = (slope_up + slope_down) * frequency * \
           triangle_amount;
-      const float notch = (kVariableSawNotchDepth + 1.0f) * notch_amount;
+      const float notch = c.one_plus_notch_depth * notch_amount;
       const float t = phase / frequency;
       this_sample -= notch * stmlib::ThisBlepSample(t);
       next_sample -= notch * stmlib::NextBlepSample(t);
@@ -157,16 +172,15 @@ class DualVariableSawOscillator {
       state->high = false;
     }
 
-    const float notch_saw = phase < pw ? phase : 1.0f + kVariableSawNotchDepth;
+    const float notch_saw = phase < pw ? phase : c.one_plus_notch_depth;
     const float triangle = phase < pw
         ? phase * slope_up
-        : 1.0f - (phase - pw) * slope_down;
+        : c.one - (phase - pw) * slope_down;
     next_sample += notch_saw * notch_amount + triangle * triangle_amount;
     state->phase = phase;
     state->next_sample = next_sample;
     // A multiplication instead of the division of the original.
-    const float scale = 1.0f / (1.0f + kVariableSawNotchDepth);
-    return (2.0f * this_sample - 1.0f) * scale;
+    return (2.0f * this_sample - c.one) * c.scale;
   }
 
   // Oscillator state.

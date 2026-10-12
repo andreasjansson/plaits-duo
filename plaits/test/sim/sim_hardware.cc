@@ -53,6 +53,9 @@ static const bool kNormalled[kNumCvInputs] = {
 
 static const float kProbeVoltage = 2.0f;
 
+// The voltage at OUT and AUX for a full scale DAC sample.
+static const float kOutputVolts = 8.0f;
+
 void ResetHardware() {
   memset(&hardware, 0, sizeof(hardware));
   for (int i = 0; i < kNumCvInputs; ++i) {
@@ -61,6 +64,8 @@ void ResetHardware() {
   for (int i = 0; i < kNumPots; ++i) {
     hardware.pot[i] = 0.5f;
   }
+  hardware.vdda = 3.3f;
+  hardware.adc_gain = 1.0f;
 }
 
 int16_t CvAdcValue(int channel) {
@@ -71,14 +76,31 @@ int16_t CvAdcValue(int channel) {
              hardware.probe_output) {
     volts = kProbeVoltage;
   }
-  float x = kZero[channel] + \
-      kGain[channel] * hardware.cv_gain_error[channel] * volts;
+  // The output of the input stage, then its reading by the ADC.
+  float output = 1.65f * (1.0f + kZero[channel] + \
+      kGain[channel] * hardware.cv_gain_error[channel] * volts);
+  if (output < hardware.swing) {
+    output = hardware.swing;
+  } else if (output > hardware.vdda - hardware.swing) {
+    output = hardware.vdda - hardware.swing;
+  }
+  float x = 2.0f * output / hardware.vdda * hardware.adc_gain - 1.0f;
   if (x < -1.0f) {
     x = -1.0f;
   } else if (x > 32767.0f / 32768.0f) {
     x = 32767.0f / 32768.0f;
   }
   return static_cast<int16_t>(x * 32768.0f);
+}
+
+void SetOutputs(int16_t main, int16_t aux) {
+  for (int i = 0; i < kNumCvInputs; ++i) {
+    if (hardware.patched_output[i]) {
+      // The output stage inverts.
+      const int16_t sample = hardware.patched_output[i] == 1 ? main : aux;
+      hardware.cv_volts[i] = -sample / 32768.0f * kOutputVolts;
+    }
+  }
 }
 
 }  // namespace sim

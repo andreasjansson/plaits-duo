@@ -30,6 +30,10 @@
 
 #include <algorithm>
 
+#ifdef PLAITS_RIG
+#include "plaits/rig/rig.h"
+#endif  // PLAITS_RIG
+
 namespace plaits {
 
 using namespace std;
@@ -66,6 +70,12 @@ void Switches::Debounce() {
     const SwitchDefinition& definition = switch_definitions[i];
     switch_state_[i] = (switch_state_[i] << 1) | \
         GPIO_ReadInputDataBit(definition.gpio, definition.pin);
+#ifdef PLAITS_RIG
+    // The rig firmware: a button pressed by a command.
+    if (rig.button_forced(i)) {
+      switch_state_[i] &= ~1;
+    }
+#endif  // PLAITS_RIG
   }
 }
 

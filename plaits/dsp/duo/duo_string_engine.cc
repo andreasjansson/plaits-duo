@@ -131,18 +131,18 @@ void DuoStringEngine::Render(
     fill(&aux[0], &aux[size], 0.0f);
   }
 
+  // The strings only differ by their pitch: the rest is computed once.
+  DuoStringParameters string_parameters;
+  string_parameters.Compute(p.accent, p.harmonics, p.timbre * p.timbre, p.morph);
   for (int i = 0; i < kDuoNumStrings; ++i) {
     bool active = i == active_string_[0] || \
         (num_voices == 2 && i == active_string_[1]);
     float* destination = (split && owner_[i] == 1) ? aux : out;
     string_[i].Render(
+        string_parameters,
         (p.trigger & TRIGGER_UNPATCHED) && active,
         (p.trigger & TRIGGER_RISING_EDGE) && newly_triggered_[i],
-        p.accent,
         f0_[i],
-        p.harmonics,
-        p.timbre * p.timbre,
-        p.morph,
         temp_buffer_,
         destination,
         size);

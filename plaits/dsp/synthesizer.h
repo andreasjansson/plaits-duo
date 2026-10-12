@@ -43,7 +43,9 @@ class Synthesizer {
   ~Synthesizer() { }
 
   void Init(stmlib::BufferAllocator* allocator) {
+#ifndef PLAITS_RIG
     voice_.Init(allocator);
+#endif  // PLAITS_RIG
     duo_voice_.Init(allocator);
     duo_mode_ = false;
   }
@@ -53,6 +55,12 @@ class Synthesizer {
       const Modulations& modulations,
       Voice::Frame* frames,
       size_t size) {
+#ifdef PLAITS_RIG
+    // The rig firmware only has duo mode (to make room for its own code),
+    // whatever the UI shows.
+    duo_mode_ = true;
+    duo_voice_.Render(patch, modulations, frames, size);
+#else
     if (patch.duo_mode != duo_mode_) {
       // The engines of the two voices share the same RAM: the engine of the
       // voice we are switching to has to be reset.
@@ -68,18 +76,25 @@ class Synthesizer {
     } else {
       voice_.Render(patch, modulations, frames, size);
     }
+#endif  // PLAITS_RIG
   }
 
   // The model being played, for the LEDs: 0 to 7 for the green LEDs, 8 to
   // 15 for the red LEDs.
   inline int active_engine(const Patch& patch) const {
+#ifdef PLAITS_RIG
+    return duo_voice_.active_engine() | (patch.duo_engine & 8);
+#else
     return duo_mode_
         ? duo_voice_.active_engine() | (patch.duo_engine & 8)
         : voice_.active_engine();
+#endif  // PLAITS_RIG
   }
 
  private:
+#ifndef PLAITS_RIG
   Voice voice_;
+#endif  // PLAITS_RIG
   DuoVoice duo_voice_;
   bool duo_mode_;
 

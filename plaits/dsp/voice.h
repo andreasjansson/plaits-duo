@@ -63,6 +63,40 @@ const int kMaxEngines = 16;
 const int kMaxTriggerDelay = 8;
 const int kTriggerDelay = 5;
 
+// stmlib::Limiter, with the same output, faster: its state and constants
+// stay in registers through the loop (the compiler would otherwise read the
+// peak again after each sample written, and the constants from the flash
+// memory).
+class ChannelLimiter {
+ public:
+  ChannelLimiter() { }
+  ~ChannelLimiter() { }
+
+  void Init() {
+    peak_ = 0.5f;
+  }
+
+  void Process(float pre_gain, float* in_out, size_t size) {
+    const float attack = InRegister(0.05f);
+    const float release = InRegister(0.00002f);
+    const float one = InRegister(1.0f);
+    const float output_gain = InRegister(0.8f);
+    float peak = peak_;
+    while (size--) {
+      float s = *in_out * pre_gain;
+      SLOPE(peak, fabsf(s), attack, release);
+      float gain = (peak <= one ? one : one / peak);
+      *in_out++ = s * gain * output_gain;
+    }
+    peak_ = peak;
+  }
+
+ private:
+  float peak_;
+
+  DISALLOW_COPY_AND_ASSIGN(ChannelLimiter);
+};
+
 class ChannelPostProcessor {
  public:
   ChannelPostProcessor() { }
@@ -89,7 +123,7 @@ class ChannelPostProcessor {
       size_t stride);
   
  private:
-  stmlib::Limiter limiter_;
+  ChannelLimiter limiter_;
   LowPassGate lpg_;
   
   DISALLOW_COPY_AND_ASSIGN(ChannelPostProcessor);

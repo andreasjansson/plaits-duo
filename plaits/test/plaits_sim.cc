@@ -35,8 +35,12 @@
 //                        fm_cv, morph_cv (attenuverters: 0.5 is centered).
 //   cv JACK VOLTS        Patches a cable carrying VOLTS into JACK: model,
 //                        v_oct, fm, harmonics, timbre, morph, trigger, level.
+//   patch JACK OUTPUT    Patches OUT (main) or AUX (aux) into JACK.
 //   unpatch JACK         Removes the cable.
 //   gain_error JACK X    Multiplies the gain of the input stage of JACK by X.
+//   hw NAME VALUE        Sets a parameter of the simulated hardware (see
+//                        plaits/test/sim/sim_hardware.h): vdda, adc_gain,
+//                        swing.
 //   press BUTTON         left, right or both.
 //   release BUTTON
 //   tap BUTTON           Press for 100ms, release, wait 100ms.
@@ -46,6 +50,9 @@
 //   leds [TIME]          Prints the LEDs, as seen over TIME (default 200ms):
 //                        G (green), R (red), Y (yellow) or . (off) for each
 //                        of the 8 LEDs, from top to bottom.
+//   duty [TIME]          Prints, for each LED, its color and the share of
+//                        TIME (default 200ms) it is lit, in %: Y100 (lit),
+//                        Y38 (dimmed by PWM), . (off).
 //   trace LED TIME       Prints the color changes of an LED (0 to 7), or of
 //                        all the LEDs (trace all TIME).
 //   state                Prints the patch and settings.
@@ -53,6 +60,7 @@
 //                        kept in flash.
 //   reboot_holding BUTTON  Power cycle with BUTTON held.
 //   clear                Discards the audio recorded so far.
+//   save PATH            Writes the audio recorded so far to PATH.
 //   echo TEXT            Prints TEXT.
 //
 // LED 0 is the top one (first model of each bank).
@@ -75,6 +83,10 @@
 #include "plaits/settings.h"
 #include "plaits/test/sim/sim_hardware.h"
 #include "plaits/ui.h"
+#ifdef PLAITS_RIG
+#include "plaits/rig/rig.h"
+#include "plaits/rig/telemetry.h"
+#endif  // PLAITS_RIG
 
 using namespace plaits;
 using namespace std;
@@ -92,6 +104,11 @@ Voice voice;
 #endif  // PLAITS_SIM_UPSTREAM
 Settings settings;
 Ui ui;
+#ifdef PLAITS_RIG
+// The rig firmware's control and telemetry, without the cycle counts (0).
+Rig plaits::rig;
+Telemetry telemetry;
+#endif  // PLAITS_RIG
 Patch patch;
 Modulations modulations;
 char shared_buffer[16384];
@@ -128,7 +145,15 @@ void Boot() {
   voice.Init(&allocator);
 #endif  // PLAITS_SIM_UPSTREAM
   settings.Init();
+#ifdef PLAITS_RIG
+  PowerOn(&rig);
+  rig.Init(&patch);
+#endif  // PLAITS_RIG
   ui.Init(&patch, &modulations, &settings);
+#ifdef PLAITS_RIG
+  PowerOn(&telemetry);
+  telemetry.Init();
+#endif  // PLAITS_RIG
 }
 
 // Same as FillBuffer() in plaits.cc.
@@ -138,6 +163,24 @@ void Block() {
 #ifndef PLAITS_SIM_UPSTREAM
   synthesizer.Render(patch, modulations, frames, kBlockSize);
   ui.set_active_engine(synthesizer.active_engine(patch));
+  const int16_t calibration_output = ui.calibration_output();
+  if (calibration_output) {
+    for (size_t i = 0; i < kBlockSize; ++i) {
+      frames[i].out = frames[i].aux = calibration_output;
+    }
+  }
+#ifdef PLAITS_RIG
+  rig.Render(frames, kBlockSize, 0);
+  telemetry.Process(
+      ui, patch, modulations, settings, 0, 0, 0, &frames[0].aux, 2,
+      kBlockSize);
+  if (rig.update_requested() || rig.restart_requested()) {
+    // The updater only exists on the module.
+    printf("%s requested\n", rig.update_requested() ? "updater" : "restart");
+    fflush(stdout);
+    rig.Init(&patch);
+  }
+#endif  // PLAITS_RIG
 #else
   voice.Render(patch, modulations, frames, kBlockSize);
   ui.set_active_engine(voice.active_engine());
@@ -147,6 +190,7 @@ void Block() {
     recording.push_back(-max(frames[i].out, short(-32767)));
     recording.push_back(-max(frames[i].aux, short(-32767)));
   }
+  sim::SetOutputs(frames[kBlockSize - 1].out, frames[kBlockSize - 1].aux);
 }
 
 int Blocks(float ms) {
@@ -243,6 +287,42 @@ void PrintLeds(float ms) {
   printf("leds %s\n", s.c_str());
 }
 
+void PrintDuty(float ms) {
+  int n = max(Blocks(ms), 1);
+  int count[kNumLEDs][4] = { { 0 } };
+  const uint32_t colors[4] = {
+    LED_COLOR_OFF, LED_COLOR_GREEN, LED_COLOR_RED, LED_COLOR_YELLOW
+  };
+  for (int b = 0; b < n; ++b) {
+    Block();
+    for (int i = 0; i < kNumLEDs; ++i) {
+      for (int c = 0; c < 4; ++c) {
+        if (sim::hardware.led_color[i] == colors[c]) {
+          ++count[i][c];
+        }
+      }
+    }
+  }
+  string s;
+  for (int i = 0; i < kNumLEDs; ++i) {
+    int best = 1;
+    for (int c = 2; c < 4; ++c) {
+      if (count[i][c] > count[i][best]) {
+        best = c;
+      }
+    }
+    char text[8];
+    if (count[i][best]) {
+      snprintf(text, sizeof(text), "%c%d", ColorChar(colors[best]),
+               static_cast<int>(100.0f * count[i][best] / n + 0.5f));
+    } else {
+      snprintf(text, sizeof(text), ".");
+    }
+    s += (i ? " " : "") + string(text);
+  }
+  printf("duty %s\n", s.c_str());
+}
+
 // led = -1 for all LEDs.
 void Trace(int led, float ms) {
   int n = Blocks(ms);
@@ -260,6 +340,19 @@ void Trace(int led, float ms) {
       previous = current;
     }
   }
+}
+
+bool SetHardware(const char* name, float value) {
+  sim::Hardware& h = sim::hardware;
+  float* floats[] = { &h.vdda, &h.adc_gain, &h.swing };
+  const char* names[] = { "vdda", "adc_gain", "swing" };
+  for (int i = 0; i < 3; ++i) {
+    if (!strcmp(name, names[i])) {
+      *floats[i] = value;
+      return true;
+    }
+  }
+  return false;
 }
 
 void PrintState() {
@@ -345,10 +438,18 @@ int main(int argc, char** argv) {
     } else if (command == "cv" && n == 3 &&
                (index = Index(kJacks, sim::kNumCvInputs, w[1])) >= 0) {
       sim::hardware.patched[index] = true;
+      sim::hardware.patched_output[index] = 0;
       sim::hardware.cv_volts[index] = atof(w[2]);
+    } else if (command == "patch" && n == 3 &&
+               (index = Index(kJacks, sim::kNumCvInputs, w[1])) >= 0 &&
+               (!strcmp(w[2], "main") || !strcmp(w[2], "aux"))) {
+      sim::hardware.patched[index] = true;
+      sim::hardware.patched_output[index] = !strcmp(w[2], "main") ? 1 : 2;
     } else if (command == "unpatch" && n == 2 &&
                (index = Index(kJacks, sim::kNumCvInputs, w[1])) >= 0) {
       sim::hardware.patched[index] = false;
+      sim::hardware.patched_output[index] = 0;
+    } else if (command == "hw" && n == 3 && SetHardware(w[1], atof(w[2]))) {
     } else if (command == "gain_error" && n == 3 &&
                (index = Index(kJacks, sim::kNumCvInputs, w[1])) >= 0) {
       sim::hardware.cv_gain_error[index] = atof(w[2]);
@@ -375,6 +476,10 @@ int main(int argc, char** argv) {
       PrintLeds(200.0f);
     } else if (command == "leds" && n == 2 && ParseDuration(w[1], &ms)) {
       PrintLeds(ms);
+    } else if (command == "duty" && n == 1) {
+      PrintDuty(200.0f);
+    } else if (command == "duty" && n == 2 && ParseDuration(w[1], &ms)) {
+      PrintDuty(ms);
     } else if (command == "trace" && n == 3 && ParseDuration(w[2], &ms)) {
       Trace(string(w[1]) == "all" ? -1 : (atoi(w[1]) & 7), ms);
     } else if (command == "state" && n == 1) {
@@ -387,6 +492,11 @@ int main(int argc, char** argv) {
       SetButtons(w[1], false);
     } else if (command == "clear" && n == 1) {
       recording.clear();
+    } else if (command == "save" && n == 2) {
+      if (!WriteWav(w[1])) {
+        perror(w[1]);
+        ok = false;
+      }
     } else if (command == "echo") {
       const char* text = line + strlen("echo");
       while (*text == ' ') ++text;

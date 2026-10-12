@@ -64,11 +64,10 @@ class DuoWaveshapingEngine : public DuoOriginalEngine<WaveshapingEngine> {
       size_t size,
       bool* already_enveloped) {
     if (!stereo) {
-      // The AUX signal of the original engine is rendered but not used.
+      // OUT of the original engine, without its AUX signal.
       for (int i = 0; i < num_voices; ++i) {
         voice_[i].Render(
-            parameters[i], i == 0 ? out : aux, temp_buffer_[0], size,
-            already_enveloped);
+            parameters[i], i == 0 ? out : aux, NULL, size, already_enveloped);
       }
       return;
     }

@@ -28,6 +28,8 @@
 #   plaits/test/plaits_sim.cc).
 # - plaits-sim-v1.1: the same simulator, built with the unmodified source of
 #   the original v1.1 firmware (the upstream-v1.1 tag), as a reference.
+# - plaits-sim-rig: the simulator of the rig firmware, whose AUX carries the
+#   telemetry of plaits/rig/telemetry.h (for rig/rig.py --virtual).
 # - plaits-analyze: measurements on the audio files written by the simulator.
 # - plaits-update-decoder: decodes a firmware update file with the code of the
 #   audio bootloader (see plaits/test/update_decoder.cc).
@@ -53,15 +55,23 @@ SIM_SOURCES = plaits/test/plaits_sim.cc plaits/test/sim/sim_hardware.cc
 HEADERS = $(wildcard plaits/*.h plaits/dsp/*.h plaits/dsp/*/*.h \
 	plaits/test/sim/*.h plaits/test/sim/*/*/*.h)
 
-all: $(BUILD_DIR)plaits-sim $(BUILD_DIR)plaits-sim-v1.1 \
+all: $(BUILD_DIR)plaits-sim $(BUILD_DIR)plaits-sim-v1.1 $(BUILD_DIR)plaits-sim-rig \
 	$(BUILD_DIR)plaits-analyze $(BUILD_DIR)plaits-update-decoder \
 	$(BUILD_DIR)plaits-stereo-linearity
 
-$(BUILD_DIR)plaits-sim: $(SIM_SOURCES) plaits/ui.cc plaits/settings.cc \
-		$(DSP_SOURCES) $(HEADERS)
+UI_SOURCES = plaits/ui.cc plaits/ui_calibration.cc plaits/settings.cc
+
+$(BUILD_DIR)plaits-sim: $(SIM_SOURCES) $(UI_SOURCES) $(DSP_SOURCES) $(HEADERS)
 	mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -Werror -Iplaits/test/sim -I. -o $@ \
-		$(SIM_SOURCES) plaits/ui.cc plaits/settings.cc $(DSP_SOURCES)
+		$(SIM_SOURCES) $(UI_SOURCES) $(DSP_SOURCES)
+
+RIG_SOURCES = plaits/rig/rig.cc plaits/rig/telemetry.cc
+$(BUILD_DIR)plaits-sim-rig: $(SIM_SOURCES) $(UI_SOURCES) $(DSP_SOURCES) \
+		$(RIG_SOURCES) $(HEADERS) $(wildcard plaits/rig/*.h)
+	mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -DPLAITS_RIG -Werror -Iplaits/test/sim -I. -o $@ \
+		$(SIM_SOURCES) $(UI_SOURCES) $(DSP_SOURCES) $(RIG_SOURCES)
 
 $(UPSTREAM_DIR)plaits/ui.cc:
 	mkdir -p $(UPSTREAM_DIR)
