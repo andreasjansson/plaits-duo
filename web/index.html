@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plaits Duo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -221,7 +226,11 @@ button:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
   .panel .pulse.on { animation: none; }
   .panel .btn .cap { transition: none; }
 }
+[hidden] { display: none !important; }
+img { max-width: 100%; }
 </style>
+</head>
+<body>
 
 <div class="flip" id="flip"><div class="flip-inner">
 <div class="app">
@@ -1482,3 +1491,5 @@ if (document.fonts && document.fonts.ready) {
 render();
 power().catch(() => {});
 </script>
+</body>
+</html>
