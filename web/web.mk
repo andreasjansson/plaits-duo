@@ -22,12 +22,11 @@
 #
 # -----------------------------------------------------------------------------
 #
-# The web demo, in build/web/: the page (and a page to choose its loops,
-# picker.html), its mark, its audio thread and loops, the firmware
-# compiled to WebAssembly (with the simulated hardware of plaits-sim) and its
-# JavaScript translation (for pages which cannot compile WebAssembly), and
-# the firmware update file, which the page offers to download (the firmware
-# must have been built: make wav).
+# The web demo, in build/web/: the page, its mark, its audio thread and
+# loops, the firmware compiled to WebAssembly (with the simulated hardware of
+# plaits-sim) and its JavaScript translation (for pages which cannot compile
+# WebAssembly), and the firmware update file, which the page offers to
+# download (the firmware must have been built: make wav).
 #
 # make -f web/web.mk WASI_SDK_PATH=/path/to/wasi-sdk BINARYEN_PATH=/path/to/binaryen
 #
@@ -55,7 +54,7 @@ SOURCES = web/plaits_web.cc plaits/test/sim/sim_hardware.cc plaits/ui.cc \
 HEADERS = $(wildcard plaits/*.h plaits/dsp/*.h plaits/dsp/*/*.h \
 	plaits/test/sim/*.h plaits/test/sim/*/*/*.h)
 
-all: $(BUILD_DIR)index.html $(BUILD_DIR)picker.html $(BUILD_DIR)worklet.js \
+all: $(BUILD_DIR)index.html $(BUILD_DIR)worklet.js \
 	$(BUILD_DIR)loops.js $(BUILD_DIR)plaits.wasm $(BUILD_DIR)plaits_fallback.js \
 	$(BUILD_DIR)plaits_duo_firmware.wav $(BUILD_DIR)gandaberunda.png
 
