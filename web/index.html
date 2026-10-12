@@ -1,0 +1,1601 @@
+<title>Plaits Duo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: one screen, never scrolled. The module, drawn as a line diagram on
+   paper as in a manual, fills the height left by the title and the controls
+   (beside them on wide screens). One light look, by choice: the panel is
+   off-white with thick black lines. */
+:root {
+  --paper: #efeee8;
+  --panel: #f8f7f2;
+  --ink: #141413;
+  --muted: #5c5b55;
+  --green: #1c9445;
+  --red: #d2392d;
+  --yellow: #e0ad18;
+  --amber: #a47400;     /* the yellow of the LEDs, dark enough for text */
+  --blue: #3447b8;
+  --font-display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --font-body: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; overflow: hidden; overscroll-behavior: none; background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45; }
+h1, h2 { font-family: var(--font-display); font-weight: 700; margin: 0; letter-spacing: 0.01em; text-wrap: balance; }
+p { margin: 0; }
+button { font-family: inherit; }
+button:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
+
+.app { height: 100%; background: var(--paper); max-width: 1280px; margin: 0 auto; padding-inline: 16px; padding-block: 12px 8px; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 10px; }
+
+.top { display: flex; align-items: center; justify-content: space-between; gap: 8px 24px; border-bottom: 3px solid var(--ink); padding-bottom: 10px; min-width: 0; }
+.top h1 { font-size: calc(var(--fit, 1) * clamp(30px, min(9vw, 7.5vh), 84px)); line-height: 0.9; text-transform: uppercase; white-space: nowrap; }
+/* The mark, Gandaberunda: black on white, multiplied onto the paper. */
+.brand { display: flex; align-items: flex-start; gap: 0.3em; min-width: 0; }
+/* From the top of the title's capitals to the bottom of the subtitle (set
+   by layoutHeader, this is near it). */
+.brand .mark { flex: none; height: calc(var(--fit, 1) * 1.25 * clamp(30px, min(9vw, 7.5vh), 84px)); width: auto; mix-blend-mode: multiply; }
+.top .sub { margin-top: 4px; font-size: calc(var(--fit, 1) * clamp(13px, min(2.2vh, 3.8vw), 20px)); line-height: 1.2; color: var(--muted); white-space: nowrap; }
+.dl { display: grid; gap: 4px; justify-items: end; flex: none; }
+.download { display: inline-flex; align-items: center; gap: 0.5em; border: 3px solid var(--ink); background: var(--ink); color: var(--panel); border-radius: 10px; padding: 0.55em 0.95em; font: 700 calc(var(--fit, 1) * clamp(15px, min(2.8vh, 4.4vw), 26px))/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.03em; cursor: pointer; white-space: nowrap; }
+.download svg { width: 1.05em; height: 1.05em; flex: none; }
+.download:hover { background: var(--panel); color: var(--ink); }
+.download:disabled { opacity: 0.55; cursor: progress; }
+.dl .meta { display: none; font-size: 13px; color: var(--muted); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: center; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; }
+.modes { display: inline-flex; border: 3px solid var(--ink); border-radius: 10px; overflow: hidden; }
+.modes button { border: 0; background: var(--panel); color: var(--ink); font: 700 clamp(15px, 2.4vh, 21px)/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.03em; padding: 0.5em 0.9em; cursor: pointer; }
+.modes button + button { border-left: 3px solid var(--ink); }
+.modes button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+.play { display: inline-flex; align-items: center; justify-content: center; gap: 0.45em; border: 3px solid var(--ink); background: var(--panel); color: var(--ink); border-radius: 999px; padding: 0.45em 0.7em; font: 700 clamp(15px, 2.4vh, 20px)/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; width: 5.4em; }
+.play svg { width: 0.8em; height: 0.8em; flex: none; fill: currentColor; }
+.play .stop-icon, .play[aria-pressed="true"] .play-icon { display: none; }
+.play[aria-pressed="true"] .stop-icon { display: block; }
+.play[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+.patterns { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 2px; }
+.patterns .chip { font: 700 14px/1.2 var(--font-display); letter-spacing: 0.02em; min-width: 1.85em; padding: 2px 5px; text-align: center; }
+.voices { display: inline-flex; border: 2px solid var(--ink); border-radius: 999px; overflow: hidden; }
+.voices button { border: 0; background: var(--panel); color: var(--ink); font: 600 13px/1.2 var(--font-body); padding: 3px 11px; cursor: pointer; }
+.voices button + button { border-left: 2px solid var(--ink); }
+.voices button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+.voices button:disabled { opacity: 0.4; cursor: default; }
+.chip { border: 2px solid var(--ink); background: transparent; color: var(--ink); border-radius: 999px; padding: 3px 8px; font: 600 13px/1.2 var(--font-body); cursor: pointer; white-space: nowrap; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+.chip:disabled { opacity: 0.4; cursor: default; }
+
+.middle { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.stage { min-height: 0; min-width: 0; height: 100%; }
+.panel { display: block; width: 100%; height: 100%; user-select: none; -webkit-user-select: none; transition: opacity 0.4s, filter 0.4s; }
+.panel.off { opacity: 0.4; filter: grayscale(1); }
+.panel .vtag rect { fill: var(--blue); }
+.panel .mark { mix-blend-mode: multiply; }
+.panel .vtag text { fill: var(--panel); font-size: 6.2px; font-weight: 700; letter-spacing: 0.08em; text-anchor: middle; }
+.stage { position: relative; }
+.poweron { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; border: 3px solid var(--ink); background: var(--ink); color: var(--panel); border-radius: 999px; padding: 8px 18px; font: 700 clamp(15px, 2.4vh, 20px)/1.1 var(--font-display); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+.panel .knob, .panel .btn { touch-action: none; }
+.panel text { font-family: var(--font-display); fill: var(--ink); }
+.panel .lbl { font-weight: 700; font-size: 9.6px; text-anchor: middle; letter-spacing: 0.02em; }
+.panel .lbl.small { font-size: 8.4px; }
+.panel .inv { fill: var(--panel); }
+.panel .knob { cursor: ns-resize; outline: none; }
+.panel .knob .cap { fill: var(--panel); stroke: var(--ink); stroke-width: 2.6; }
+.panel .knob .top { fill: none; stroke: var(--ink); stroke-width: 1.1; }
+.panel .knob .ptr { stroke: var(--ink); stroke-width: 2.6; stroke-linecap: round; }
+.panel .knob:focus-visible .cap { stroke: var(--green); }
+.panel .mod { fill: none; stroke: var(--ink); stroke-width: 1.5; stroke-linecap: round; }
+.panel .moddot { fill: var(--ink); }
+.panel .dots { fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; stroke-dasharray: 0.01 2.7; }
+.panel .btn { cursor: pointer; outline: none; }
+.panel .btn .ring { fill: var(--panel); stroke: var(--ink); stroke-width: 2.3; }
+.panel .btn .cap { fill: var(--ink); transform-box: fill-box; transform-origin: center; transition: transform 70ms ease-out; }
+.panel .btn.down .cap { transform: scale(0.78); }
+.panel .btn:focus-visible .ring { stroke: var(--green); }
+.panel .btnhit { fill: transparent; }
+.panel .pulse { fill: none; stroke: var(--ink); stroke-width: 1.4; opacity: 0; transform-box: fill-box; transform-origin: center; }
+.panel .pulse.on { animation: pulse 0.9s ease-out; }
+@keyframes pulse { from { opacity: 0.9; transform: scale(0.9); } to { opacity: 0; transform: scale(2.1); } }
+.panel .led { stroke: var(--ink); stroke-width: 1.9; fill: var(--panel); }
+.panel .glow { opacity: 0; }
+/* Uppercase, as Pixie prints them. */
+.panel .name { font-size: 7.2px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; cursor: pointer; }
+.panel .name.sel { font-weight: 700; }
+.panel .name.sel.g { fill: var(--green); }
+.panel .name.sel.r { fill: var(--red); }
+/* In duo mode, the stereo models light up yellow. */
+.panel .name.sel.y { fill: var(--amber); }
+.panel .hit { fill: transparent; cursor: pointer; }
+.panel .namegroup:focus-visible .hit { stroke: var(--green); stroke-width: 0.8; }
+.panel .namegroup { outline: none; }
+.panel .bank { font-size: 7px; font-weight: 700; letter-spacing: 0.14em; }
+.panel .jack .nut { fill: var(--panel); stroke: var(--ink); stroke-width: 2.2; }
+.panel .jack .hole { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; }
+.panel .jack.patched .hole { fill: var(--ink); }
+.panel .jack .halo { fill: none; stroke: var(--ink); stroke-width: 1.6; opacity: 0; }
+.panel .jack.out .nut { fill: var(--ink); stroke: var(--panel); }
+.panel .jack.out .hole { fill: var(--ink); stroke: var(--panel); }
+.panel .jack.out.patched .hole { fill: var(--panel); }
+.panel .jack.out .halo { stroke: var(--panel); }
+
+/* The help: on the back of the page on phones (the "?" button flips it), in
+   the column under the controls in the wide layout. */
+.flip { height: 100%; perspective: 1800px; }
+.flip-inner { position: relative; height: 100%; transform-style: preserve-3d; transition: transform 0.6s cubic-bezier(0.3, 0.1, 0.2, 1); }
+.flip.flipped .flip-inner { transform: rotateY(180deg); }
+.flip-inner > .app, .back { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.back { position: absolute; inset: 0; transform: rotateY(180deg); background: var(--paper); overflow: auto; display: grid; align-content: start; justify-items: center; padding-inline: 16px; padding-block: 12px 16px; }
+.flip:not(.flipped) .back { visibility: hidden; transition: visibility 0s 0.6s; }
+.back-inner { width: 100%; max-width: 560px; display: grid; gap: 10px; }
+.back-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 3px solid var(--ink); padding-bottom: 8px; }
+.back-head h2 { font: 700 26px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.02em; }
+.close-help { border: 2px solid var(--ink); background: var(--ink); color: var(--panel); border-radius: 999px; padding: 6px 12px; font: 700 14px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; }
+.helpbtn { width: 27px; height: 27px; flex: none; border: 2px solid var(--ink); background: var(--panel); color: var(--ink); border-radius: 50%; font: 700 15px/1 var(--font-display); cursor: pointer; padding: 0; }
+.helpbtn[aria-expanded="true"] { background: var(--ink); color: var(--panel); }
+.help { --fig: 74px; display: grid; gap: 12px; min-height: 0; font-size: 13px; line-height: 1.38; }
+.help h2 { display: none; }
+.help h3 { margin: 0 0 3px; font: 700 16px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.04em; }
+.help-step { display: grid; grid-template-columns: var(--fig) minmax(0, 1fr); gap: 10px; align-items: start; }
+.help-fig { width: var(--fig); height: auto; display: block; }
+/* As big as a phone allows, on one screen. */
+@media (max-width: 359px), (max-height: 600px) { .help { --fig: 46px; font-size: 12px; line-height: 1.3; gap: 7px; } .help h3 { font-size: 15px; } .help-step { gap: 8px; } .back { padding-block: 8px 4px; } }
+/* Narrow or short phones: the text alone, as wide as it gets. */
+@media (max-width: 379px), (max-height: 700px) { .back .help-fig { display: none; } .back .help-step { grid-template-columns: minmax(0, 1fr); } }
+@media (min-width: 370px) and (min-height: 720px) { .help { --fig: 80px; font-size: 14px; gap: 13px; } .help h3 { font-size: 18px; } }
+.help ol, .help ul { margin: 0; padding-left: 1.15em; display: grid; gap: 3px; }
+.help li::marker { font-weight: 600; }
+.help b { font-weight: 600; }
+.help .small { font-size: 0.92em; color: var(--muted); }
+.help-badge { display: inline-block; vertical-align: 2px; margin-left: 4px; padding: 2px 7px 1px; border-radius: 999px; background: var(--blue); color: var(--panel); font: 700 0.62em/1.2 var(--font-display); letter-spacing: 0.06em; }
+.help-dl { border: 0; padding: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 2px; cursor: pointer; }
+.help-dl:disabled { opacity: 0.55; cursor: progress; }
+.help-status { font-size: 13px; font-weight: 600; }
+.help-status:empty { display: none; }
+.app.wide.help-in .help { --fig: calc(var(--help-size, 13px) * 3.6); font-size: var(--help-size, 13px); line-height: 1.34; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px 24px; align-items: start; grid-area: help; overflow: auto; align-self: start; max-height: 100%; border-top: 3px solid var(--ink); padding-top: 12px; }
+.app.wide.help-in .help h3 { font-size: calc(var(--help-size, 13px) * 1.25); }
+.app.wide.help-in .help h2 { grid-column: 1 / -1; display: block; margin: 0; font: 700 18px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.04em; }
+.app.wide.help-in .helpbtn { display: none; }
+.app.wide.help-in .help.plain { gap: 8px 24px; line-height: 1.28; }
+.app.wide.help-in .help.plain .help-fig { display: none; }
+.app.wide.help-in .help.plain .help-step { grid-template-columns: minmax(0, 1fr); }
+@media (prefers-reduced-motion: reduce) { .flip-inner { transition: none; } .flip:not(.flipped) .back { transition: none; } }
+.bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--muted); min-width: 0; }
+.status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The status line only appears with a message (a download, an error). */
+.bottom:not(.message) { display: none; }
+
+/* On phones, "Download firmware" becomes "Firmware" if it does not fit
+   (see layoutHeader). */
+.download.short .wide { display: none; }
+@media (min-width: 760px) and (min-height: 760px) {
+  .top { align-items: end; }
+  .app { padding-block: 20px 10px; gap: 14px; }
+}
+/* Wide (chosen by layoutPage when the module is bigger this way, on any
+   screen wider than it is tall enough): the title and the controls in a
+   column on the left, the module over the full height on the right, the two
+   together centered. */
+.app.wide {
+  --side: 320px;
+  max-width: calc(var(--side) + 40px + 32px + (100vh - 40px) * 240 / 364);
+  padding-block: 20px;
+  grid-template-columns: var(--side) minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas: "top stage" "controls stage" ". stage" "bottom stage";
+  column-gap: 40px;
+  row-gap: 18px;
+}
+/* With the help in the column: the column as wide as the page leaves beside
+   the module (whose width the height sets), the help in two columns when
+   that is wide enough, to fit in less height. */
+.app.wide.help-in {
+  --side: clamp(320px, 100vw - 72px - (100vh - 40px) * 240 / 364, 560px);
+  grid-template-areas: "top stage" "controls stage" "help stage" "bottom stage";
+}
+.app.wide .top { grid-area: top; flex-direction: column; align-items: flex-start; gap: 14px; padding-bottom: 16px; }
+.app.wide .dl { justify-items: start; }
+/* With room beside the title (see layoutHeader): the button on its row. */
+.app.wide .top.inline { flex-direction: row; align-items: center; justify-content: space-between; }
+.app.wide .top.inline .dl { justify-items: end; }
+.app.wide .controls { grid-area: controls; flex-direction: column; align-items: flex-start; gap: 12px; }
+.app.wide .row, .app.wide .patterns { justify-content: flex-start; }
+.app.wide .middle { grid-area: stage; }
+.app.wide .bottom { grid-area: bottom; }
+/* Wide and short (a phone on its side, a short window): the module over
+   the full height on the right, and on the left the title and the controls
+   in rows, as on a phone held upright. */
+.app.wide.rows {
+  max-width: none;
+  padding-block: 8px;
+  grid-template-columns: minmax(0, 1fr) calc((100vh - 16px) * 240 / 364);
+  column-gap: 24px;
+  row-gap: 10px;
+}
+.app.wide.rows .top { flex-direction: row; align-items: center; gap: 8px 24px; padding-bottom: 8px; }
+.app.wide.rows .controls { flex-direction: row; align-items: center; justify-content: center; gap: 8px 16px; }
+.app.wide.rows .row, .app.wide.rows .patterns { justify-content: center; }
+@media (prefers-reduced-motion: reduce) {
+  .panel .pulse.on { animation: none; }
+  .panel .btn .cap { transition: none; }
+}
+</style>
+
+<div class="flip" id="flip"><div class="flip-inner">
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <img class="mark" src="gandaberunda.png" alt="" width="400" height="370">
+      <div>
+        <h1>Plaits Duo</h1>
+        <p class="sub">duophonic stereo plaits</p>
+      </div>
+    </div>
+    <div class="dl">
+      <button type="button" class="download" id="download" title="plaits_duo_firmware.zip (about 1 MB), with the WAV update file inside. To update: hold the left button while powering the module on, then play the WAV into the MODEL input.">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span><span class="wide">Download </span>firmware</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="row">
+      <div class="modes" role="group" aria-label="Firmware mode">
+        <button type="button" id="mode-original" aria-pressed="false">Original v1.1</button>
+        <button type="button" id="mode-duo" aria-pressed="true">Duo</button>
+      </div>
+      <button type="button" class="play" id="play" aria-pressed="false">
+        <svg class="play-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 1.2 14.6 8 2.5 14.8z"/></svg>
+        <svg class="stop-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.8" y="1.8" width="12.4" height="12.4" rx="1.2"/></svg>
+        <span class="label">Play</span>
+      </button>
+    </div>
+    <div class="row">
+      <div class="patterns" role="group" aria-label="Loop" id="patterns"></div>
+      <div class="voices" role="group" aria-label="Voices">
+        <button type="button" id="mono" aria-pressed="true">Monophonic</button>
+        <button type="button" id="duophonic" aria-pressed="false">Duophonic</button>
+      </div>
+      <button type="button" class="helpbtn" id="help-open" aria-expanded="false" aria-controls="back" aria-label="How to install and play Plaits Duo">?</button>
+    </div>
+  </div>
+
+  <div class="middle">
+    <div class="stage">
+      <svg class="panel" id="panel" viewBox="0 0 240 364" role="group" aria-label="Plaits panel"></svg>
+      <p class="poweron" id="poweron" hidden>Powering on…</p>
+    </div>
+  </div>
+
+  <footer class="bottom">
+    <p class="status" id="status" role="status"></p>
+  </footer>
+</div>
+
+<div class="back" id="back" aria-hidden="true" inert>
+  <div class="back-inner" id="back-inner">
+    <div class="back-head">
+      <h2>How to</h2>
+      <button type="button" class="close-help" id="help-close">Back to the module</button>
+    </div>
+    <p class="help-status" id="help-status" role="status"></p>
+    <section class="help" id="help" aria-labelledby="help-title">
+      <h2 id="help-title">How to</h2>
+      <div class="help-step">
+        <svg class="help-fig" viewBox="0 0 74 112" aria-hidden="true">
+          <rect x="2" y="2" width="40" height="108" rx="4" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.4"/>
+          <circle cx="14" cy="14" r="8" fill="none" stroke="var(--blue)" stroke-width="1.8"/>
+          <circle cx="14" cy="14" r="4.2" fill="var(--ink)"/>
+          <circle cx="30" cy="14" r="4.2" fill="var(--ink)"/>
+          <g stroke="var(--ink)" stroke-width="1.4">
+            <circle cx="22" cy="32" r="2.4" fill="none"/><circle cx="22" cy="39" r="2.4" fill="var(--green)"/>
+            <circle cx="22" cy="46" r="2.4" fill="var(--green)"/><circle cx="22" cy="53" r="2.4" fill="var(--green)"/>
+            <circle cx="22" cy="62" r="2.4" fill="var(--ink)"/><circle cx="22" cy="69" r="2.4" fill="var(--ink)"/>
+            <circle cx="22" cy="76" r="2.4" fill="none"/><circle cx="22" cy="83" r="2.4" fill="none"/>
+          </g>
+          <circle cx="14" cy="98" r="5.6" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/>
+          <circle cx="14" cy="98" r="2.2" fill="var(--ink)"/>
+          <path d="M14,98 C14,110 46,112 56,100 L60,94" fill="none" stroke="var(--ink)" stroke-width="2.6" stroke-linecap="round"/>
+          <rect x="50" y="58" width="22" height="36" rx="4" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.2"/>
+          <path d="M57.5,69 L66,76 L57.5,83 Z" fill="var(--ink)"/>
+        </svg>
+        <div>
+          <h3>Install the firmware</h3>
+          <ol>
+            <li><button type="button" class="help-dl" id="help-download">Download the firmware</button>, unzip it.</li>
+            <li>Patch a cable from your computer's or phone's headphone output into <b>MODEL</b>. <b>FREQUENCY</b> at noon.</li>
+            <li>Power the module on holding the <b>left button</b>.</li>
+            <li>Notifications off (any other sound spoils it), then play the WAV. The level meter rises from the 4th LED: set <b>FREQUENCY</b> for 2 or 3 lit. The bottom LEDs circle as it loads. All red: press left, play louder.</li>
+          </ol>
+        </div>
+      </div>
+      <div class="help-step">
+        <svg class="help-fig" viewBox="0 0 74 62" aria-hidden="true">
+          <rect x="2" y="2" width="70" height="58" rx="4" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.4"/>
+          <path d="M24,7 V15 M20.5,11.5 L24,15 L27.5,11.5 M50,7 V15 M46.5,11.5 L50,15 L53.5,11.5" fill="none" stroke="var(--blue)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="24" cy="23" r="5" fill="var(--ink)"/>
+          <circle cx="50" cy="23" r="5" fill="var(--ink)"/>
+          <circle cx="24" cy="38" r="4" fill="var(--yellow)" stroke="var(--ink)" stroke-width="1.6"/>
+          <circle cx="50" cy="38" r="4" fill="var(--red)" stroke="var(--ink)" stroke-width="1.6"/>
+          <text x="24" y="53" text-anchor="middle" font-size="7.5" font-weight="700" fill="var(--ink)" style="font-family:var(--font-display)">STEREO</text>
+          <text x="50" y="53" text-anchor="middle" font-size="7.5" font-weight="700" fill="var(--ink)" style="font-family:var(--font-display)">SPLIT</text>
+        </svg>
+        <div>
+          <h3>Switch to duo mode</h3>
+          <ul>
+            <li><b>Both buttons</b>: duo mode. Again: the original firmware.</li>
+            <li><b>Left</b>: stereo models (yellow). <b>Right</b>: split (red).</li>
+          </ul>
+        </div>
+      </div>
+      <div class="help-step help-cal">
+        <svg class="help-fig" viewBox="0 0 74 62" aria-hidden="true">
+          <rect x="2" y="2" width="70" height="58" rx="4" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.4"/>
+          <circle cx="16" cy="44" r="6" fill="var(--ink)"/><circle cx="16" cy="44" r="2.3" fill="var(--panel)"/>
+          <text x="16" y="57" text-anchor="middle" font-size="6.6" font-weight="700" fill="var(--ink)" style="font-family:var(--font-display)">OUT</text>
+          <path d="M16,38 C16,18 30,12 40,16" fill="none" stroke="var(--blue)" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M16,38 C20,26 46,24 56,30" fill="none" stroke="var(--blue)" stroke-width="2" stroke-dasharray="3 3" stroke-linecap="round"/>
+          <circle cx="44" cy="17" r="6" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><circle cx="44" cy="17" r="2.3" fill="var(--ink)"/>
+          <text x="44" y="9" text-anchor="middle" font-size="6.6" font-weight="700" fill="var(--ink)" style="font-family:var(--font-display)">V/OCT</text>
+          <text x="31" y="10" text-anchor="middle" font-size="7" font-weight="700" fill="var(--blue)" style="font-family:var(--font-display)">1</text>
+          <circle cx="60" cy="35" r="6" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><circle cx="60" cy="35" r="2.3" fill="var(--ink)"/>
+          <text x="60" y="51" text-anchor="middle" font-size="6.6" font-weight="700" fill="var(--ink)" style="font-family:var(--font-display)">LEVEL</text>
+          <text x="40" y="35" text-anchor="middle" font-size="7" font-weight="700" fill="var(--blue)" style="font-family:var(--font-display)">2</text>
+        </svg>
+        <div>
+          <h3>Calibrate <span class="help-badge">Do this once</span></h3>
+          <ul>
+            <li>In duo mode, hold <b>both buttons</b> for 2 s: the bottom LED pulses green, and OUT buzzes (turn your mixer down).</li>
+            <li>Patch <b>OUT</b> into <b>V/OCT</b>, wait a second, press left: the LED turns yellow.</li>
+            <li>Move the cable to <b>LEVEL</b>, wait a second, press left: the model's LED is back. Done and saved.</li>
+            <li class="small">All red: wrong jack, press a button and retry. Uncalibrated, voice 2 can be 25 cents per octave off.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="help-step">
+        <svg class="help-fig" viewBox="0 0 74 92" aria-hidden="true">
+          <rect x="2" y="2" width="70" height="88" rx="4" fill="var(--panel)" stroke="var(--ink)" stroke-width="2.4"/>
+          <text x="20" y="13" text-anchor="middle" font-size="7" font-weight="700" fill="var(--ink)" style="font-family:var(--font-display)">LEVEL</text>
+          <text x="52" y="13" text-anchor="middle" font-size="7" font-weight="700" fill="var(--ink)" style="font-family:var(--font-display)">V/OCT</text>
+          <circle cx="20" cy="24" r="6" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><circle cx="20" cy="24" r="2.3" fill="var(--ink)"/>
+          <circle cx="52" cy="24" r="6" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/><circle cx="52" cy="24" r="2.3" fill="var(--ink)"/>
+          <rect x="7" y="34" width="26" height="10" rx="5" fill="var(--blue)"/>
+          <rect x="39" y="34" width="26" height="10" rx="5" fill="var(--blue)"/>
+          <text x="20" y="41.6" text-anchor="middle" font-size="6.6" font-weight="700" fill="var(--panel)" style="font-family:var(--font-display)">VOICE 2</text>
+          <text x="52" y="41.6" text-anchor="middle" font-size="6.6" font-weight="700" fill="var(--panel)" style="font-family:var(--font-display)">VOICE 1</text>
+          <rect x="6" y="50" width="62" height="36" rx="3" fill="var(--ink)"/>
+          <text x="22" y="58" text-anchor="middle" font-size="6.6" font-weight="700" fill="var(--panel)" style="font-family:var(--font-display)">OUT</text>
+          <text x="52" y="58" text-anchor="middle" font-size="6.6" font-weight="700" fill="var(--panel)" style="font-family:var(--font-display)">AUX</text>
+          <circle cx="22" cy="67" r="5" fill="var(--ink)" stroke="var(--panel)" stroke-width="1.6"/>
+          <circle cx="52" cy="67" r="5" fill="var(--ink)" stroke="var(--panel)" stroke-width="1.6"/>
+          <text x="22" y="80" text-anchor="middle" font-size="5.8" font-weight="700" fill="var(--panel)" style="font-family:var(--font-display)">L · V1</text>
+          <text x="52" y="80" text-anchor="middle" font-size="5.8" font-weight="700" fill="var(--panel)" style="font-family:var(--font-display)">R · V2</text>
+        </svg>
+        <div>
+          <h3>Usage</h3>
+          <ul>
+            <li><b>V/OCT</b> and <b>LEVEL</b>: the pitches of voice 1 and voice 2 (LEVEL stops at about −0.7V). Empty LEVEL: one voice. <b>TRIGGER</b> pings both.</li>
+            <li><b>Stereo</b>: OUT left, AUX right. <b>Split</b>: voice 1 on OUT, voice 2 on AUX.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+</div></div>
+
+<script src="loops.js"></script>
+<script>
+// ---------- panel layout (units: 240 x 364, from the real panel, widened in
+// the middle to fit the names of the models) ----------
+const LED_X = 120;
+const LED_Y = k => 70.13 + 15.307 * k;
+const KNOBS = [
+  { id: 'frequency', pot: 0, x: 32, y: 82.74, r: 21, value: 0.396, label: 'FREQUENCY' },
+  { id: 'harmonics', pot: 1, x: 208, y: 82.74, r: 21, value: 0.5, label: 'HARMONICS' },
+  { id: 'timbre', pot: 2, x: 32, y: 160.13, r: 16, value: 0.5, label: 'TIMBRE', mod: 'timbre' },
+  { id: 'morph', pot: 3, x: 208, y: 160.13, r: 16, value: 0.5, label: 'MORPH', mod: 'morph' },
+  { id: 'timbre_cv', pot: 4, x: 32, y: 228.45, r: 8.4, value: 0.85, label: 'TIMBRE attenuverter' },
+  { id: 'fm_cv', pot: 5, x: 120, y: 228.45, r: 8.4, value: 0.5, label: 'FM attenuverter' },
+  { id: 'morph_cv', pot: 6, x: 208, y: 228.45, r: 8.4, value: 0.85, label: 'MORPH attenuverter' },
+];
+const COLS = [21, 70.5, 120, 169.5, 219];
+// Jacks: firmware index (CvAdcChannel) or -1 for the outputs.
+const JACKS = [
+  { name: 'MODEL', cv: 0, x: COLS[0], y: 273.52, desc: 'MODEL: not patched' },
+  { name: 'TIMBRE', cv: 4, x: COLS[1], y: 273.52, desc: 'TIMBRE CV: a slow triangle from the sequencer' },
+  { name: 'FM', cv: 2, x: COLS[2], y: 273.52, desc: 'FM: not patched' },
+  { name: 'MORPH', cv: 5, x: COLS[3], y: 273.52, desc: 'MORPH CV: a slow sine from the sequencer' },
+  { name: 'HARMO', cv: 3, x: COLS[4], y: 273.52, desc: 'HARMONICS: not patched' },
+  { name: 'TRIG', cv: 6, x: COLS[0], y: 314.91, desc: 'TRIGGER: a trigger on every note' },
+  { name: 'LEVEL', cv: 7, x: COLS[1], y: 314.91, desc: 'LEVEL: in duo mode, the pitch of the second voice (1V/octave)' },
+  { name: 'V/OCT', cv: 1, x: COLS[2], y: 314.91, desc: 'V/OCT: the melody' },
+  { name: 'OUT', cv: -1, x: COLS[3], y: 314.91, desc: 'OUT: to the left ear (both ears in the original firmware)' },
+  { name: 'AUX', cv: -2, x: COLS[4], y: 314.91, desc: 'AUX: to the right ear in duo mode' },
+];
+// The names of the models as After Later Audio's Pixie prints them, and the
+// same names for the duo models.
+const DUO_NAMES = ['Classic', 'Waveshpr', 'Two op. FM', 'Formant', 'Harmonic', 'Wavetable', 'String', 'Vowel'];
+const NAMES = {
+  original: {
+    left: ['Classic', 'Waveshpr', 'Two op. FM', 'Formant', 'Harmonic', 'Wavetable', 'Chords', 'Vowel'],
+    right: ['Cloud', 'Fltd noise', 'Prtcl noise', 'String', 'Modal', 'Kick', 'Snare', 'Hi-hat'],
+  },
+  duo: { left: DUO_NAMES, right: DUO_NAMES },
+};
+// The loops of the sequencer (see loops.js), numbered on the page. In duo
+// mode, the second voice plays each loop's countermelody.
+const PAGE_LOOPS = ['rings-live', 'ebm-bass', 'rings-synco', 'string-machine', 'vowel-duet',
+                    'wavetable-seq', 'industrial', 'chant', 'random-walk', 'accents'];
+const NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+const ALL_LOOPS = [...PLAITS_LOOPS.current, ...PLAITS_LOOPS.candidates];
+const PATTERNS = PAGE_LOOPS.map((id, i) => ({ id, name: NUMERALS[i], loop: ALL_LOOPS.find(l => l.id === id) }));
+
+// ---------- drawing ----------
+const NS = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('panel');
+function el(tag, attrs, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  (parent || svg).appendChild(e);
+  return e;
+}
+const angle = v => -150 + 300 * v;
+const polar = (x, y, r, deg) => [x + r * Math.sin(deg * Math.PI / 180), y - r * Math.cos(deg * Math.PI / 180)];
+
+function drawPanel() {
+  el('rect', { x: 1.8, y: 1.8, width: 236.4, height: 360.4, rx: 5, fill: 'var(--panel)', stroke: 'var(--ink)', 'stroke-width': 3.2 });
+  for (const [x, y] of [[21, 8.5], [219, 8.5], [21, 355.7], [219, 355.7]]) {
+    el('circle', { cx: x, cy: y, r: 3.6, fill: 'var(--paper)', stroke: 'var(--ink)', 'stroke-width': 1.8 });
+  }
+  // The braid along the top.
+  el('line', { x1: 1.8, y1: 20.6, x2: 238.2, y2: 20.6, stroke: 'var(--ink)', 'stroke-width': 1.4 });
+  el('line', { x1: 1.8, y1: 32.4, x2: 238.2, y2: 32.4, stroke: 'var(--ink)', 'stroke-width': 1.4 });
+  let a = 'M1.8,23', b = 'M1.8,30';
+  for (let x = 1.8, up = true; x < 238.2; x += 6, up = !up) {
+    const nx = Math.min(x + 6, 238.2);
+    a += ` L${nx},${up ? 30 : 23}`;
+    b += ` L${nx},${up ? 23 : 30}`;
+  }
+  el('path', { d: a, fill: 'none', stroke: 'var(--ink)', 'stroke-width': 1.3, 'stroke-linejoin': 'round' });
+  el('path', { d: b, fill: 'none', stroke: 'var(--ink)', 'stroke-width': 1.3, 'stroke-linejoin': 'round' });
+  // In duo mode, V/OCT and LEVEL are the pitches of the two voices.
+  ui.voiceTags = [[COLS[2], 'VOICE 1'], [COLS[1], 'VOICE 2']].map(([x, label]) => {
+    const g = el('g', { class: 'vtag' });
+    el('rect', { x: x - 15, y: 326.6, width: 30, height: 8.6, rx: 4.3 }, g);
+    el('text', { x, y: 333.2 }, g, label);
+    return g;
+  });
+  // Bottom rule and name.
+  el('line', { x1: 12, y1: 340.5, x2: 228, y2: 340.5, stroke: 'var(--ink)', 'stroke-width': 2.4 });
+  // The name, with the mark, as on the panels of Mutable Instruments: both
+  // centred between the rule (its bottom edge at 341.7) and the inside of
+  // the outline (360.6), the name by its capitals (5.66 high at 8px).
+  el('image', { href: 'gandaberunda.png', x: 82.4, y: 343.65, width: 16.2, height: 15, class: 'mark' });
+  el('text', { x: 131.4, y: 353.95, 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 700, 'letter-spacing': '0.3em' }, svg, 'PLAITS DUO');
+
+  // Dotted lines from the labels and attenuverters to their jacks.
+  for (const d of ['M32,197 L32,212', 'M208,197 L208,212', 'M32,238.5 C32,252 70.5,248 70.5,263.5',
+                   'M120,238.5 L120,263.5', 'M208,238.5 C208,252 169.5,248 169.5,263.5', 'M30.2,314.9 L61.3,314.9']) {
+    el('path', { d, class: 'dots' });
+  }
+
+  // Labels.
+  el('text', { x: 32, y: 121.2, class: 'lbl' }, svg, 'FREQUENCY');
+  el('text', { x: 208, y: 121.2, class: 'lbl' }, svg, 'HARMONICS');
+  el('text', { x: 32, y: 193.2, class: 'lbl' }, svg, 'TIMBRE');
+  el('text', { x: 208, y: 193.2, class: 'lbl' }, svg, 'MORPH');
+  el('text', { x: 120, y: 209.5, class: 'lbl' }, svg, 'FM');
+  for (const x of [32, 120, 208]) {
+    el('text', { x: x - 11.2, y: 219.5, class: 'lbl small' }, svg, '−');
+    el('text', { x: x + 11.2, y: 219.5, class: 'lbl small' }, svg, '+');
+  }
+  el('text', { x: COLS[0], y: 258, class: 'lbl' }, svg, 'MODEL');
+  el('text', { x: COLS[4], y: 258, class: 'lbl' }, svg, 'HARMO');
+  el('rect', { x: 150.5, y: 288.2, width: 87.5, height: 49, rx: 3.5, fill: 'var(--ink)' });
+  for (const j of JACKS.slice(5)) {
+    el('text', { x: j.x, y: 299.5, class: 'lbl' + (j.cv < 0 ? ' inv' : '') }, svg, j.name);
+  }
+
+  // Buttons, with the names of the columns where the panel has its icons.
+  // Each button with its label (the name of its column): pressing either
+  // presses the button, over a larger area than the button itself.
+  ui.bank = [];
+  ui.buttons = [107.37, 132.63].map((x, i) => {
+    const g = el('g', { class: 'btn', tabindex: 0, role: 'button', 'aria-label': i ? 'Right button' : 'Left button' });
+    el('rect', { x: i ? x - 10 : x - 42, y: 37, width: 52, height: 23, rx: 4, class: 'btnhit' }, g);
+    ui.bank.push(el('text', { x: i ? 142.5 : 97.5, y: 51, 'text-anchor': i ? 'start' : 'end', class: 'bank' }, g, ''));
+    el('circle', { cx: x, cy: 48.44, r: 12, class: 'pulse' }, g);
+    el('circle', { cx: x, cy: 48.44, r: 7.4, class: 'ring' }, g);
+    el('circle', { cx: x, cy: 48.44, r: 4.9, class: 'cap' }, g);
+    return g;
+  });
+
+  // LEDs and the names of the models.
+  ui.leds = [];
+  ui.names = { left: [], right: [] };
+  for (let k = 0; k < 8; ++k) {
+    const y = LED_Y(k);
+    const glow = el('circle', { cx: LED_X, cy: y, r: 8.5, class: 'glow' });
+    const led = el('circle', { cx: LED_X, cy: y, r: 4.3, class: 'led' });
+    ui.leds.push({ led, glow });
+    for (const side of ['left', 'right']) {
+      const g = el('g', { class: 'namegroup', tabindex: 0, role: 'button' });
+      const x = side === 'left' ? 111 : 129;
+      el('rect', { x: side === 'left' ? x - 55 : x - 1, y: y - 6.5, width: 56, height: 13, rx: 2, class: 'hit' }, g);
+      const t = el('text', { x, y: y + 2.6, 'text-anchor': side === 'left' ? 'end' : 'start', class: 'name ' + (side === 'left' ? 'g' : 'r') }, g, '');
+      ui.names[side].push({ g, t, model: k + (side === 'left' ? 0 : 8) });
+    }
+  }
+
+  // Knobs.
+  for (const k of KNOBS) {
+    const g = el('g', { class: 'knob', tabindex: 0, role: 'slider', 'aria-label': k.label, 'aria-valuemin': 0, 'aria-valuemax': 100 });
+    if (k.mod) {
+      k.arc = el('path', { class: 'mod' }, g);
+      k.dot = el('circle', { r: 1.9, class: 'moddot' }, g);
+    }
+    el('circle', { cx: k.x, cy: k.y, r: k.r, class: 'cap' }, g);
+    if (k.r > 10) el('circle', { cx: k.x, cy: k.y, r: k.r * 0.72, class: 'top' }, g);
+    if (k.r < 10) el('line', { x1: k.x, y1: k.y - k.r - 5.5, x2: k.x, y2: k.y - k.r - 1.5, stroke: 'var(--ink)', 'stroke-width': 1.6 }, g);
+    k.ptr = el('line', { x1: k.x, y1: k.y, x2: k.x, y2: k.y - k.r + 2.5, class: 'ptr' }, g);
+    if (k.r > 10) k.ptr.setAttribute('y1', k.y - k.r * 0.25);
+    k.g = g;
+  }
+
+  // Jacks.
+  for (const j of JACKS) {
+    const g = el('g', { class: 'jack' + (j.cv < 0 ? ' out' : '') });
+    el('title', {}, g, j.desc);
+    j.halo = el('circle', { cx: j.x, cy: j.y, r: 11.2, class: 'halo' }, g);
+    el('circle', { cx: j.x, cy: j.y, r: 8.4, class: 'nut' }, g);
+    el('circle', { cx: j.x, cy: j.y, r: 3.9, class: 'hole' }, g);
+    j.g = g;
+  }
+  // In duo mode, OUT and AUX are the left and right channels in the stereo
+  // layout, the two voices in the split layout (over the box of the outputs).
+  ui.outTags = [COLS[3], COLS[4]].map(x => {
+    const g = el('g', { class: 'vtag' });
+    el('rect', { x: x - 15, y: 326.6, width: 30, height: 8.6, rx: 4.3 }, g);
+    const text = el('text', { x, y: 333.2 }, g, '');
+    return { g, text };
+  });
+}
+
+// ---------- state ----------
+const ui = {};
+const state = {
+  powered: false, duo: false, model: 0, leds: [0, 0, 0, 0, 0, 0, 0, 0],
+  timbre: 0.5, morph: 0.5, cv: [0, 0, 0, 0, 0, 0, 0, 0], patched: [0, 0, 0, 0, 0, 0, 0, 0],
+};
+let wantDuo = true;        // The mode chosen above the panel.
+let pendingMode = null;    // Until the firmware has switched.
+let playing = false;
+let pattern = PATTERNS[0].id;
+let duophonic = false;     // In duo mode, the loop's second voice into LEVEL.
+let stateKnown = false;
+// The model played, the same in both modes (see matchingModel): 0 to 7 for
+// the duo models, other numbers for the other models of the original
+// firmware.
+const instrumentOf = (duo, model) => duo ? model & 7 : (model === 11 ? 6 : model < 8 && model !== 6 ? model : 8 + model);
+let instrument = null;
+let expected = null;       // After a mode switch: the model the page selects.
+// Knobs set when a model is chosen: HARMONICS at 9 o'clock for the vowels
+// (from noon up, the vowel model says words), and for the string, more
+// TIMBRE (the density of the noise which bows it when TRIGGER is unpatched)
+// and MORPH (a long decay).
+const KNOB_PRESETS = { 7: { harmonics: 0.2 }, 6: { timbre: 0.65, morph: 0.8 } };
+let audio = null;          // Promise of { ctx, node }.
+let node = null;
+let settled = false;       // The firmware has run for a moment after power on.
+
+// The firmware's controls go to wherever it runs, the sequencer's to the
+// audio thread.
+function send(message) {
+  const control = message.type === 'pot' || message.type === 'button' || message.type === 'select';
+  if (control && master === 'local' && local) local.handle(message);
+  else if (node) node.port.postMessage(message);
+}
+
+// ---------- audio ----------
+// The module is powered on when the page loads. Browsers only let audio run
+// after a click or a key press: until then, the firmware runs on the page
+// itself (its LEDs, buttons and knobs work, without sound). Then its memory
+// moves to the audio thread, which carries on from there.
+let audioContext = null;
+let local = null;          // The firmware on the page, until audio runs.
+let master = null;         // Where the firmware runs: 'local' or 'audio'.
+let workletReady = false;
+let running = false;
+
+// The firmware on the page, run in real time from a timer, without sound:
+// powered on, or carrying on from a copy of its memory.
+class LocalModule {
+  constructor(x, pots, memory = null) {
+    this.x = x;
+    x._initialize();
+    if (memory) {
+      new Uint8Array(x.memory.buffer).set(new Uint8Array(memory));
+    } else {
+      x.plaits_reset_hardware();
+    }
+    pots.forEach((value, index) => x.plaits_set_pot(index, value));
+    if (!memory) x.plaits_boot();
+    this.time = performance.now();
+    this.timer = setInterval(() => this.tick(), 16);
+  }
+
+  handle(m) {
+    const x = this.x;
+    if (m.type === 'pot') x.plaits_set_pot(m.index, m.value);
+    else if (m.type === 'button') x.plaits_set_button(m.index, m.down ? 1 : 0);
+    else if (m.type === 'select') x.plaits_select_model(m.model);
+  }
+
+  tick() {
+    const x = this.x;
+    const blocksPerMs = 47.87234 / 12;
+    let blocks = Math.min(Math.floor((performance.now() - this.time) * blocksPerMs), 400);
+    this.time += blocks / blocksPerMs;
+    while (blocks > 0) {
+      const n = Math.min(blocks, 64);
+      x.plaits_render(n);
+      blocks -= n;
+    }
+    const leds = [];
+    for (let i = 0; i < 8; ++i) leds.push(x.plaits_led(i));
+    onState({ leds, duo: x.plaits_duo_mode() === 1, model: x.plaits_model(),
+              timbre: x.plaits_timbre(), morph: x.plaits_morph(),
+              cv: [0, 0, 0, 0, 0, 0, 0, 0], patched: [0, 0, 0, 0, 0, 0, 0, 0] });
+  }
+
+  // Stops, and returns a copy of the memory of the firmware.
+  handOver() {
+    clearInterval(this.timer);
+    return new Uint8Array(this.x.memory.buffer).slice().buffer;
+  }
+}
+
+// The firmware compiled to WebAssembly, or its JavaScript translation when
+// the page cannot compile WebAssembly.
+async function firmwareExports(wasm) {
+  try {
+    return (await WebAssembly.instantiate(wasm, {})).instance.exports;
+  } catch (e) {
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'plaits_fallback.js';
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+    return globalThis.PlaitsFallback;
+  }
+}
+
+// memory: the firmware to carry on from (see reviveAudio), instead of a
+// module just powered on.
+function power(memory = null) {
+  if (audio) return audio;
+  let ctx;
+  try {
+    ctx = new AudioContext({ sampleRate: 47872, latencyHint: 'interactive' });
+  } catch (e) {
+    ctx = new AudioContext({ latencyHint: 'interactive' });
+  }
+  audioContext = ctx;
+  ctx.addEventListener('statechange', onAudioState);
+  scheduleRender();
+  audio = (async () => {
+    const wasm = await (await fetch('plaits.wasm')).arrayBuffer();
+    const pots = KNOBS.map(k => k.value);
+    if (ctx.state !== 'running') {
+      try {
+        local = new LocalModule(await firmwareExports(wasm.slice(0)), pots, memory);
+        master = 'local';
+      } catch (e) {
+        local = null;
+      }
+      checkRunning();
+    }
+    await ctx.audioWorklet.addModule('worklet.js');
+    const n = new AudioWorkletNode(ctx, 'plaits', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
+    n.connect(ctx.destination);
+    node = n;
+    sendTransport();
+    await new Promise((resolve, reject) => {
+      n.port.onmessage = async e => {
+        if (e.data.type === 'ready') resolve();
+        else if (e.data.type === 'wasm-error') {
+          try {
+            await ctx.audioWorklet.addModule('plaits_fallback.js');
+            n.port.postMessage({ type: 'init-fallback', pots });
+          } catch (err) { reject(err); }
+        }
+      };
+      n.port.postMessage({ type: 'init', wasm, pots }, [wasm]);
+    });
+    n.port.onmessage = e => {
+      if (e.data.type === 'state' && master === 'audio') onState(e.data);
+      else if (e.data.type === 'snapshot') snapshot = e.data.memory;
+    };
+    // Carrying on from a copy of the firmware, with the knobs where they
+    // are now (unless the page ran it meanwhile: it hands it over below).
+    if (memory && !local) {
+      n.port.postMessage({ type: 'restore', memory: memory.slice(0) });
+      KNOBS.forEach(k => n.port.postMessage({ type: 'pot', index: k.pot, value: k.value }));
+    }
+    workletReady = true;
+    onAudioState();
+    return ctx;
+  })().catch(err => {
+    setStatus('The module could not start in this browser: ' + (err && err.message ? err.message : err) + '. Reload the page to try again.', true);
+    throw err;
+  });
+  return audio;
+}
+
+// Once audio runs, the audio thread takes over the firmware.
+function onAudioState() {
+  if (audioContext && audioContext.state === 'running' && workletReady && master !== 'audio') {
+    if (local) node.port.postMessage({ type: 'restore', memory: local.handOver() });
+    local = null;
+    master = 'audio';
+  }
+  checkRunning();
+}
+
+// The first click, tap or key press lets audio run (and lets it run again
+// after the browser stopped it).
+function unlockAudio() {
+  if (audioContext && audioContext.state !== 'running') audioContext.resume().then(onAudioState, () => {});
+  if (master === 'audio') reviveAudio();
+}
+
+// Leaving the page (another tab, the browser in the background, a call)
+// stops its audio: 'suspended', or 'interrupted' on iOS. Coming back, the
+// page resumes it; if the browser will not, it builds a new audio context,
+// whose firmware carries on from a copy of the memory of the old one (taken
+// every 2 seconds), on the page until the next tap lets audio run.
+let snapshot = null;
+let reviving = false;
+function takeSnapshot() {
+  if (master === 'audio' && node && audioContext && audioContext.state === 'running') node.port.postMessage({ type: 'snapshot' });
+}
+setInterval(takeSnapshot, 2000);
+async function reviveAudio() {
+  if (reviving || master !== 'audio' || !audioContext || audioContext.state === 'running') return;
+  reviving = true;
+  try {
+    try { await Promise.race([audioContext.resume(), new Promise(resolve => setTimeout(resolve, 800))]); } catch (e) {}
+    if (audioContext.state === 'running' || master !== 'audio') return;
+    const old = audioContext;
+    old.removeEventListener('statechange', onAudioState);
+    try { old.close(); } catch (e) {}
+    audio = null; audioContext = null; node = null; workletReady = false; master = null; local = null;
+    await power(snapshot);
+  } catch (e) {
+    // power() reports it.
+  } finally {
+    reviving = false;
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') reviveAudio();
+  else takeSnapshot();
+});
+addEventListener('pageshow', () => reviveAudio());
+addEventListener('focus', () => reviveAudio());
+for (const type of ['pointerdown', 'keydown', 'click', 'touchend']) {
+  document.addEventListener(type, unlockAudio, true);
+}
+
+let settling = false;
+// When the firmware runs: it starts in its original mode; once its knob
+// readings have settled, switch modes as on the module, if duo mode is the
+// one chosen.
+function checkRunning() {
+  running = master === 'local' || (master === 'audio' && !!audioContext && audioContext.state === 'running');
+  state.powered = running;
+  if (running && !settled && !settling) {
+    settling = true;
+    setTimeout(() => { settled = true; syncMode(); scheduleRender(); }, 700);
+  }
+  scheduleRender();
+}
+
+// Whether the module is heard: the audio thread runs it, and the browser
+// lets audio run.
+function audible() {
+  return master === 'audio' && !!audioContext && audioContext.state === 'running';
+}
+
+// Starts the sequencer, if it is stopped: choosing a loop or a model, or
+// pressing a button, plays.
+async function startPlaying() {
+  if (playing) return;
+  playing = true;
+  scheduleRender();
+  try { await power(); } catch (e) { playing = false; scheduleRender(); return; }
+  sendTransport();
+}
+
+function sendTransport() {
+  const p = PATTERNS.find(x => x.id === pattern);
+  send({ type: 'loop', loop: PLAITS_LOOPS.resolve(p.loop, duophonic ? 'counter' : 'off') });
+  send({ type: 'transport', playing, pattern: null, secondVoice: duophonic });
+}
+
+// One instrument for both modes: after a switch, the model of the new mode
+// which matches the one played before (the firmware remembers one for each
+// mode). -1 when there is none (chords, and the noise and drum models).
+function matchingModel(fromDuo, model, recalled) {
+  if (fromDuo) {
+    const base = model & 7;
+    return base === 6 ? 11 : base;
+  }
+  const base = model === 11 ? 6 : (model < 8 && model !== 6 ? model : -1);
+  return base < 0 ? -1 : (recalled & 8) | base;
+}
+
+function onState(m) {
+  const wasDuo = state.duo, wasModel = state.model, known = stateKnown;
+  Object.assign(state, m);
+  stateKnown = true;
+  const now = instrumentOf(state.duo, state.model);
+  if (known && wasDuo !== state.duo) {
+    const target = matchingModel(wasDuo, wasModel, state.model);
+    if (target >= 0 && target !== state.model) {
+      send({ type: 'select', model: target });
+      expected = { model: target, at: performance.now() };
+    } else {
+      instrument = now;
+    }
+  } else if (expected) {
+    // The same instrument in the other mode: not a new choice.
+    if (state.model === expected.model || performance.now() - expected.at > 500) {
+      expected = null;
+      instrument = now;
+    }
+  } else {
+    if (known && now !== instrument && KNOB_PRESETS[now]) {
+      for (const [id, value] of Object.entries(KNOB_PRESETS[now])) setKnob(KNOBS.find(k => k.id === id), value);
+    }
+    instrument = now;
+  }
+  if (pendingMode !== null && state.duo === pendingMode) pendingMode = null;
+  if (wasDuo !== state.duo) wantDuo = state.duo;
+  scheduleRender();
+}
+
+// The status line: a message, for a moment (or until the page is reloaded,
+// for an error).
+let baseStatus = '';
+let flashTimer = null;
+function setStatus(text, message = false) {
+  baseStatus = text;
+  if (message) {
+    clearTimeout(flashTimer);
+    flashTimer = null;
+  }
+  if (!flashTimer) {
+    document.getElementById('status').textContent = text;
+    document.querySelector('.bottom').classList.toggle('message', message);
+  }
+}
+function flash(text) {
+  clearTimeout(flashTimer);
+  flashTimer = null;
+  // Also on the back of the page, for a download from the help there.
+  const helpStatus = document.getElementById('help-status');
+  helpStatus.textContent = text || '';
+  if (!text) { setStatus(baseStatus); return; }
+  document.getElementById('status').textContent = text;
+  document.querySelector('.bottom').classList.add('message');
+  flashTimer = setTimeout(() => { flashTimer = null; helpStatus.textContent = ''; setStatus(baseStatus); }, 6000);
+}
+
+// ---------- buttons ----------
+// ---------- button presses ----------
+// The buttons as the firmware sees them. Each press of a button by a pointer
+// or a key reaches the firmware as a press of its own: down for at least
+// MIN_PRESS ms (the firmware debounces its buttons, and only reads them
+// between blocks of audio), then up for PRESS_GAP ms before the next press
+// of that button. A button which is only kept down to make its press long
+// enough is let go before the other button goes down: only buttons held
+// together are pressed together (which switches modes, as on the module).
+function makeButtons({ send, now, later, cancel, show }) {
+  const MIN_PRESS = 80, PRESS_GAP = 40;
+  const b = [0, 1].map(() => ({ held: false, down: false, at: 0, free: 0, queued: 0, timer: null }));
+  const wake = (i, at) => {
+    const s = b[i];
+    if (s.timer !== null) cancel(s.timer);
+    s.timer = later(() => { s.timer = null; pump(i); }, Math.max(0, at - now()));
+  };
+  const visual = i => show(i, b[i].held || b[i].down);
+  function pump(i) {
+    const s = b[i], o = b[1 - i], t = now();
+    if (s.down) {
+      // Let go when the press is long enough, unless it is still held and no
+      // other press of this button is waiting.
+      if (s.held && s.queued === 0) return;
+      if (t < s.at + MIN_PRESS) return wake(i, s.at + MIN_PRESS);
+      s.down = false;
+      s.free = t + PRESS_GAP;
+      send(i, false);
+      visual(i);
+      if (s.queued > 0) wake(i, s.free);
+      // The other button may be waiting for this one.
+      if (o.queued > 0 && !o.down) wake(1 - i, s.free);
+      return;
+    }
+    if (s.queued === 0) return;
+    if (t < s.free) return wake(i, s.free);
+    if (o.down && !o.held) return wake(i, Math.max(o.at + MIN_PRESS, t) + PRESS_GAP);
+    s.queued--;
+    s.down = true;
+    s.at = t;
+    send(i, true);
+    visual(i);
+    pump(i);
+  }
+  return {
+    hold(i) { if (b[i].held) return; b[i].held = true; b[i].queued++; visual(i); pump(i); },
+    release(i) { if (!b[i].held) return; b[i].held = false; visual(i); pump(i); },
+    held(i) { return b[i].held; },
+  };
+}
+
+const buttons = makeButtons({
+  send: (i, down) => send({ type: 'button', index: i, down }),
+  now: () => performance.now(),
+  later: (fn, ms) => setTimeout(fn, ms),
+  cancel: t => clearTimeout(t),
+  show: (i, down) => ui.buttons[i].classList.toggle('down', down),
+});
+
+function pulseButtons() {
+  for (const b of ui.buttons) {
+    const p = b.querySelector('.pulse');
+    p.classList.remove('on');
+    void p.getBoundingClientRect();
+    p.classList.add('on');
+  }
+}
+
+// Both buttons pressed together, as to switch modes on the module.
+function pressBoth() {
+  if (!node) return;
+  pendingMode = !state.duo;
+  pulseButtons();
+  buttons.hold(0);
+  buttons.hold(1);
+  setTimeout(() => { buttons.release(0); buttons.release(1); }, 180);
+  setTimeout(() => { pendingMode = null; scheduleRender(); }, 1500);
+  scheduleRender();
+}
+
+// Switches the firmware to the chosen mode with the two buttons.
+function syncMode() {
+  if (settled && pendingMode === null && state.duo !== wantDuo) pressBoth();
+}
+
+function chooseMode(duo) {
+  wantDuo = duo;
+  scheduleRender();
+  if (!audio) { power().catch(() => {}); return; }
+  syncMode();
+}
+
+// ---------- knobs ----------
+function setKnob(k, v) {
+  k.value = Math.min(1, Math.max(0, v));
+  send({ type: 'pot', index: k.pot, value: k.value });
+  scheduleRender();
+}
+
+function bindKnob(k) {
+  const defaults = k.value;
+  let start = null;
+  k.g.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    power().catch(() => {});
+    k.g.setPointerCapture(e.pointerId);
+    k.g.focus({ preventScroll: true });
+    start = { y: e.clientY, v: k.value };
+  });
+  k.g.addEventListener('pointermove', e => {
+    if (!start) return;
+    const span = e.shiftKey ? 900 : 220;
+    setKnob(k, start.v + (start.y - e.clientY) / span);
+  });
+  const end = () => { start = null; };
+  k.g.addEventListener('pointerup', end);
+  k.g.addEventListener('pointercancel', end);
+  k.g.addEventListener('dblclick', () => setKnob(k, defaults));
+  k.g.addEventListener('keydown', e => {
+    const step = e.shiftKey ? 0.002 : 0.01;
+    const keys = { ArrowUp: step, ArrowRight: step, ArrowDown: -step, ArrowLeft: -step, PageUp: 0.1, PageDown: -0.1 };
+    if (e.key in keys) { e.preventDefault(); setKnob(k, k.value + keys[e.key]); }
+    else if (e.key === 'Home') { e.preventDefault(); setKnob(k, 0); }
+    else if (e.key === 'End') { e.preventDefault(); setKnob(k, 1); }
+  });
+}
+
+// ---------- rendering ----------
+let renderQueued = false;
+function scheduleRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => { renderQueued = false; render(); });
+}
+
+const LED_COLORS = [null, 'var(--green)', 'var(--red)', 'var(--yellow)'];
+
+function arcPath(x, y, r, a0, a1) {
+  const [x0, y0] = polar(x, y, r, a0), [x1, y1] = polar(x, y, r, a1);
+  const large = Math.abs(a1 - a0) > 180 ? 1 : 0;
+  const sweep = a1 > a0 ? 1 : 0;
+  return `M${x0.toFixed(2)},${y0.toFixed(2)} A${r},${r} 0 ${large} ${sweep} ${x1.toFixed(2)},${y1.toFixed(2)}`;
+}
+
+function render() {
+  // Powering on: until the firmware has run for a moment, the first time.
+  const booting = !!audio && !settled;
+  svg.classList.toggle('off', booting);
+  document.getElementById('poweron').hidden = !booting;
+  // Until the firmware runs and has switched modes, the mode chosen.
+  const duo = pendingMode !== null ? pendingMode : (settled ? state.duo : wantDuo);
+  document.getElementById('mode-original').setAttribute('aria-pressed', String(!duo));
+  document.getElementById('mode-duo').setAttribute('aria-pressed', String(duo));
+  const names = duo ? NAMES.duo : NAMES.original;
+  ui.bank[0].textContent = duo ? 'STEREO' : '';
+  ui.bank[1].textContent = duo ? 'SPLIT' : '';
+  // Once on, the module shows its last state while the browser pauses it.
+  const on = running || settled;
+  const selected = on && settled && pendingMode === null ? state.model : -1;
+  for (const side of ['left', 'right']) {
+    ui.names[side].forEach((n, k) => {
+      const label = names[side][k];
+      if (n.t.textContent !== label) { n.t.textContent = label; fitName(n.t); }
+      n.t.classList.toggle('sel', n.model === selected);
+      n.t.classList.toggle('y', duo && side === 'left');
+      n.g.setAttribute('aria-label', label + (duo ? (side === 'left' ? ', stereo' : ', split') : '') + (n.model === selected ? ', selected' : ''));
+    });
+  }
+  ui.leds.forEach((l, k) => {
+    const c = on ? LED_COLORS[state.leds[k]] : null;
+    l.led.style.fill = c || 'var(--panel)';
+    l.glow.style.fill = c || 'transparent';
+    l.glow.style.opacity = c ? 0.28 : 0;
+  });
+  for (const k of KNOBS) {
+    k.ptr.setAttribute('transform', `rotate(${angle(k.value).toFixed(2)} ${k.x} ${k.y})`);
+    k.g.setAttribute('aria-valuenow', Math.round(k.value * 100));
+    if (k.mod) {
+      const live = running && state.patched[k.mod === 'timbre' ? 4 : 5];
+      const v = live ? state[k.mod] : k.value;
+      const r = k.r + 3.6;
+      const [dx, dy] = polar(k.x, k.y, r, angle(v));
+      k.dot.setAttribute('cx', dx.toFixed(2));
+      k.dot.setAttribute('cy', dy.toFixed(2));
+      k.dot.style.opacity = live ? 1 : 0;
+      k.arc.setAttribute('d', live && Math.abs(v - k.value) > 0.004 ? arcPath(k.x, k.y, r, angle(k.value), angle(v)) : '');
+    }
+  }
+  for (const j of JACKS) {
+    let patched, activity = 0;
+    if (j.cv < 0) {
+      patched = on;
+      activity = 0;
+    } else {
+      patched = on && state.patched[j.cv] === 1;
+      if (patched) {
+        const v = state.cv[j.cv];
+        activity = j.cv === 6 ? (v > 0 ? 1 : 0) : j.cv === 1 || j.cv === 7 ? 0.25 + Math.min(0.75, Math.abs(v) / 2) : Math.min(1, Math.abs(v) / 2.5);
+      }
+    }
+    j.g.classList.toggle('patched', patched);
+    j.halo.style.opacity = (activity * 0.8).toFixed(2);
+  }
+  const play = document.getElementById('play');
+  // What is heard: stopped while the browser pauses the audio (another tab).
+  const sounding = playing && audible();
+  play.setAttribute('aria-pressed', String(sounding));
+  play.querySelector('.label').textContent = sounding ? 'Stop' : 'Play';
+  document.querySelectorAll('#patterns button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.id === pattern)));
+  for (const [id, on] of [['mono', !duophonic], ['duophonic', duophonic]]) {
+    const b = document.getElementById(id);
+    b.disabled = !duo;
+    b.setAttribute('aria-pressed', String(duo ? on : id === 'mono'));
+  }
+  ui.voiceTags.forEach(t => { t.style.display = duo ? '' : 'none'; });
+  ui.voiceTags[1].style.opacity = duo && !duophonic ? 0.35 : 1;
+  const split = (state.model & 8) !== 0;
+  ui.outTags.forEach((t, i) => {
+    t.g.style.display = duo ? '' : 'none';
+    t.text.textContent = split ? ['VOICE 1', 'VOICE 2'][i] : ['LEFT', 'RIGHT'][i];
+    // With one voice, AUX plays it too.
+    t.g.style.opacity = duo && split && i === 1 && !duophonic ? 0.35 : 1;
+  });
+}
+
+// Long names are squeezed to fit between the LEDs and the knobs.
+function fitName(t) {
+  t.removeAttribute('textLength');
+  t.removeAttribute('lengthAdjust');
+  try {
+    if (t.getComputedTextLength() > 53) {
+      t.setAttribute('textLength', 53);
+      t.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+    }
+  } catch (e) {}
+}
+
+// ---------- events ----------
+drawPanel();
+KNOBS.forEach(bindKnob);
+
+// A button held by a pointer or a key. The first press only powers the
+// module on.
+function hold(i) {
+  if (!master) return;
+  buttons.hold(i);
+  startPlaying();
+}
+function release(i) { buttons.release(i); }
+
+ui.buttons.forEach((b, i) => {
+  b.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    b.setPointerCapture(e.pointerId);
+    hold(i);
+  });
+  b.addEventListener('pointerup', () => release(i));
+  b.addEventListener('pointercancel', () => release(i));
+  b.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); hold(i); } });
+  b.addEventListener('keyup', e => { if (e.key === 'Enter' || e.key === ' ') release(i); });
+});
+
+for (const side of ['left', 'right']) {
+  for (const n of ui.names[side]) {
+    const choose = async () => {
+      startPlaying();
+      try { await power(); } catch (e) { return; }
+      send({ type: 'select', model: n.model });
+    };
+    n.g.addEventListener('click', choose);
+    n.g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(); } });
+  }
+}
+
+document.getElementById('mode-original').addEventListener('click', () => chooseMode(false));
+document.getElementById('mode-duo').addEventListener('click', () => chooseMode(true));
+
+const patternBox = document.getElementById('patterns');
+PATTERNS.forEach((p, i) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'chip';
+  b.dataset.id = p.id;
+  b.textContent = p.name;
+  b.setAttribute('aria-label', 'Loop ' + (i + 1));
+  // Choosing a loop plays it.
+  b.addEventListener('click', () => {
+    pattern = p.id;
+    if (playing) sendTransport();
+    else startPlaying();
+    scheduleRender();
+  });
+  patternBox.appendChild(b);
+});
+
+document.getElementById('play').addEventListener('click', async () => {
+  // Paused by the browser: the press (which lets audio run, see unlockAudio)
+  // plays on.
+  if (!(playing && !audible())) playing = !playing;
+  scheduleRender();
+  try { await power(); } catch (e) { playing = false; scheduleRender(); return; }
+  sendTransport();
+});
+
+for (const [id, on] of [['mono', false], ['duophonic', true]]) {
+  document.getElementById(id).addEventListener('click', () => {
+    duophonic = on;
+    sendTransport();
+    scheduleRender();
+  });
+}
+
+// Z and X hold the left and right buttons, to turn a knob at the same time.
+const KEY_BUTTONS = { z: 0, x: 1 };
+document.addEventListener('keydown', e => {
+  const i = KEY_BUTTONS[e.key.toLowerCase()];
+  if (i === undefined || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target.closest && e.target.closest('input, textarea')) return;
+  if (header.app.inert) return;   // the help in front
+  hold(i);
+});
+document.addEventListener('keyup', e => {
+  const i = KEY_BUTTONS[e.key.toLowerCase()];
+  if (i !== undefined) release(i);
+});
+
+// ---------- firmware download ----------
+// The update file is published in two halves (two WAV files): they are
+// joined again, and saved in a zip.
+const FIRMWARE_PARTS = ['plaits_duo_firmware_1.wav', 'plaits_duo_firmware_2.wav'];
+
+// The format and sample chunks of a WAV file.
+function wavChunks(buffer) {
+  const view = new DataView(buffer);
+  const chunks = {};
+  for (let p = 12; p + 8 <= buffer.byteLength; ) {
+    const tag = String.fromCharCode(...new Uint8Array(buffer, p, 4));
+    const size = view.getUint32(p + 4, true);
+    chunks[tag] = new Uint8Array(buffer, p + 8, size);
+    p += 8 + size + (size & 1);
+  }
+  return chunks;
+}
+
+async function firmwareWav() {
+  const parts = await Promise.all(FIRMWARE_PARTS.map(async f => {
+    const r = await fetch(f);
+    if (!r.ok) throw { code: 'fetch' };
+    return wavChunks(await r.arrayBuffer());
+  }));
+  const fmt = parts[0]['fmt '];
+  const size = parts.reduce((n, p) => n + p.data.length, 0);
+  const wav = new Uint8Array(12 + 8 + fmt.length + 8 + size);
+  const view = new DataView(wav.buffer);
+  const ascii = (o, t) => { for (let i = 0; i < 4; ++i) wav[o + i] = t.charCodeAt(i); };
+  ascii(0, 'RIFF'); view.setUint32(4, wav.length - 8, true); ascii(8, 'WAVE');
+  ascii(12, 'fmt '); view.setUint32(16, fmt.length, true); wav.set(fmt, 20);
+  let o = 20 + fmt.length;
+  ascii(o, 'data'); view.setUint32(o + 4, size, true); o += 8;
+  for (const p of parts) { wav.set(p.data, o); o += p.data.length; }
+  return wav;
+}
+
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; ++n) {
+    let c = n;
+    for (let k = 0; k < 8; ++k) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(bytes) {
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; ++i) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+async function deflateRaw(bytes) {
+  if (typeof CompressionStream === 'undefined') return null;
+  try {
+    const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  } catch (e) {
+    return null;
+  }
+}
+
+// A zip file with one file, compressed if the browser can.
+async function zip(name, bytes) {
+  const file = new TextEncoder().encode(name);
+  const crc = crc32(bytes);
+  const deflated = await deflateRaw(bytes);
+  const method = deflated ? 8 : 0;
+  const body = deflated || bytes;
+  const date = ((2026 - 1980) << 9) | (10 << 5) | 9;
+  const header = (signature, central) => {
+    const v = new DataView(new ArrayBuffer(central ? 46 : 30));
+    let o = 0;
+    const u16 = x => { v.setUint16(o, x, true); o += 2; };
+    const u32 = x => { v.setUint32(o, x, true); o += 4; };
+    u32(signature);
+    if (central) u16(20);
+    u16(20); u16(0); u16(method); u16(0); u16(date);
+    u32(crc); u32(body.length); u32(bytes.length); u16(file.length); u16(0);
+    if (central) { u16(0); u16(0); u16(0); u32(0); u32(0); }
+    return v;
+  };
+  const local = header(0x04034b50, false);
+  const central = header(0x02014b50, true);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, 1, true);
+  end.setUint16(10, 1, true);
+  end.setUint32(12, 46 + file.length, true);
+  end.setUint32(16, 30 + file.length + body.length, true);
+  return new Blob([local, file, body, central, file, end], { type: 'application/zip' });
+}
+
+async function firmwareZip() {
+  return zip('plaits_duo_firmware.wav', await firmwareWav());
+}
+
+let downloadsPromise = null;
+function downloadsCapability() {
+  if (!downloadsPromise) {
+    downloadsPromise = window.claude && window.claude.use
+      ? Promise.resolve(window.claude.use('downloads')).catch(() => null)
+      : Promise.resolve(null);
+  }
+  return downloadsPromise;
+}
+// From the button in the header, or the one in the help.
+async function saveFirmware(button) {
+  button.disabled = true;
+  flash('Preparing the firmware file…');
+  try {
+    const downloads = await downloadsCapability();
+    if (!downloads) {
+      flash('Saving files is not available in this view. Open the page in the Claude app or on claude.ai.');
+      return;
+    }
+    const data = await firmwareZip();
+    await downloads.save({ filename: 'plaits_duo_firmware.zip', data });
+    flash('Saved plaits_duo_firmware.zip.');
+  } catch (err) {
+    const code = err && err.code;
+    flash(
+        code === 'declined' ? '' :
+        code === 'rate_limited' ? 'A save prompt is already open.' :
+        code === 'extension_not_enabled' ? 'Zip files cannot be saved in this view.' :
+        code === 'fetch' ? 'The file could not be loaded. Reload the page and try again.' :
+        'The file could not be saved here.');
+  } finally {
+    button.disabled = false;
+  }
+}
+for (const id of ['download', 'help-download']) {
+  document.getElementById(id).addEventListener('click', e => saveFirmware(e.currentTarget));
+}
+
+// ---------- header ----------
+// The mark spans the title: from the top of the capitals of PLAITS DUO to
+// the bottom of the subtitle. On phones, the header has the width of the
+// module (which is centred, and narrower than the page when the height
+// limits it), and its type shrinks if it would not fit.
+const header = {
+  top: document.querySelector('.top'), brand: document.querySelector('.brand'),
+  mark: document.querySelector('.brand .mark'), h1: document.querySelector('.brand h1'),
+  sub: document.querySelector('.brand .sub'), download: document.getElementById('download'),
+  panel: document.getElementById('panel'), app: document.querySelector('.app'),
+  ctx: document.createElement('canvas').getContext('2d'),
+};
+// The ink of a line of text: how far it reaches above and below its baseline.
+function inkOf(el, text) {
+  const cs = getComputedStyle(el);
+  header.ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  return header.ctx.measureText(text);
+}
+function baselineOf(el) {
+  const probe = document.createElement('span');
+  probe.style.cssText = 'display:inline-block;width:0;height:0;vertical-align:baseline';
+  el.appendChild(probe);
+  const y = probe.getBoundingClientRect().top;
+  probe.remove();
+  return y;
+}
+function fitMark() {
+  const { brand, mark, h1, sub } = header;
+  fitSubtitle();
+  const top = baselineOf(h1) - inkOf(h1, h1.textContent.toUpperCase()).actualBoundingBoxAscent;
+  const bottom = baselineOf(sub) + inkOf(sub, sub.textContent).actualBoundingBoxDescent;
+  mark.style.height = (bottom - top).toFixed(1) + 'px';
+  mark.style.marginTop = (top - brand.getBoundingClientRect().top).toFixed(1) + 'px';
+}
+// The subtitle spaced out so that it ends where the title ends (both
+// measured to the ink of their last letter).
+function lastInkRight(el) {
+  const node = el.firstChild, text = node.textContent;
+  const range = document.createRange();
+  range.setStart(node, text.length - 1);
+  range.setEnd(node, text.length);
+  const cs = getComputedStyle(el);
+  const last = cs.textTransform === 'uppercase' ? text.slice(-1).toUpperCase() : text.slice(-1);
+  const m = inkOf(el, last);
+  const spacing = parseFloat(cs.letterSpacing) || 0;
+  return range.getBoundingClientRect().right - spacing - (m.width - m.actualBoundingBoxRight);
+}
+function fitSubtitle() {
+  const { h1, sub } = header;
+  sub.style.letterSpacing = '';
+  for (let pass = 0; pass < 2; ++pass) {
+    const spacing = parseFloat(getComputedStyle(sub).letterSpacing) || 0;
+    const delta = lastInkRight(h1) - lastInkRight(sub);
+    sub.style.letterSpacing = (spacing + delta / (sub.textContent.length - 1)).toFixed(3) + 'px';
+  }
+}
+// The edges of the module as drawn (the viewBox, centred in the element).
+function moduleEdges() {
+  const r = header.panel.getBoundingClientRect();
+  const k = Math.min(r.width / 240, r.height / 364);
+  const left = r.left + (r.width - 240 * k) / 2;
+  return [left, left + 240 * k];
+}
+const HEADER_GAP = 14;   // between the title and the download button
+function layoutHeader() {
+  const { top, brand, download, app } = header;
+  const wide = app.classList.contains('wide'), rows = app.classList.contains('rows');
+  const align = () => {
+    if (wide) return;
+    const cs = getComputedStyle(app), a = app.getBoundingClientRect();
+    const [left, right] = moduleEdges();
+    top.style.marginLeft = Math.max(0, left - a.left - parseFloat(cs.paddingLeft)).toFixed(1) + 'px';
+    top.style.marginRight = Math.max(0, a.right - parseFloat(cs.paddingRight) - right).toFixed(1) + 'px';
+  };
+  // The scale at which the title and the button fit side by side (their
+  // widths scale with it, the gap between them does not).
+  const fitting = fit => {
+    const widths = (brand.scrollWidth + download.getBoundingClientRect().width) / fit;
+    return Math.min(1, (top.clientWidth - HEADER_GAP) / widths);
+  };
+  let fit = 1;
+  top.style.setProperty('--fit', 1);
+  download.classList.remove('short');
+  top.classList.remove('inline');
+  top.style.marginLeft = top.style.marginRight = '';
+  if (wide && !rows) {
+    // Beside the title where it fits there, as "Download firmware" or
+    // "Firmware", with the title at least 85% of its size; below it
+    // otherwise.
+    top.classList.add('inline');
+    fitMark();
+    if (fitting(1) < 1) download.classList.add('short');
+    fit = fitting(1);
+    if (fit < 0.85) {
+      top.classList.remove('inline');
+      download.classList.remove('short');
+    } else if (fit < 1) {
+      top.style.setProperty('--fit', fit.toFixed(4));
+    }
+    fitMark();
+    return;
+  }
+  // The module's size depends on the height of the header, which depends on
+  // the scale: a few passes.
+  for (let pass = 0; pass < 6; ++pass) {
+    align();
+    fitMark();
+    // "Download firmware" where it fits as it is, "Firmware" otherwise.
+    if (pass === 0 && fitting(fit) < 1) download.classList.add('short');
+    const next = fitting(fit);
+    if (Math.abs(next - fit) < 0.002) break;
+    fit = next;
+    top.style.setProperty('--fit', fit.toFixed(4));
+  }
+  align();
+  fitMark();
+}
+// ---------- help ----------
+// On the back of the page, which the "?" button turns over; in the wide
+// layout in the column under the controls instead, when it fits there whole.
+const help = {
+  flip: document.getElementById('flip'), back: document.getElementById('back'),
+  inner: document.getElementById('back-inner'), section: document.getElementById('help'),
+  open: document.getElementById('help-open'), close: document.getElementById('help-close'),
+};
+function showBack(on) {
+  const front = header.app;
+  help.flip.classList.toggle('flipped', on);
+  help.open.setAttribute('aria-expanded', on);
+  help.back.inert = !on;
+  help.back.setAttribute('aria-hidden', !on);
+  front.inert = on;
+  if (on) front.setAttribute('aria-hidden', 'true');
+  else front.removeAttribute('aria-hidden');
+}
+help.open.addEventListener('click', () => {
+  showBack(true);
+  help.close.focus({ preventScroll: true });
+});
+help.close.addEventListener('click', () => {
+  showBack(false);
+  help.open.focus({ preventScroll: true });
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && help.flip.classList.contains('flipped')) help.close.click();
+});
+function placeHelp() {
+  const { app } = header;
+  if (app.classList.contains('wide') && !app.classList.contains('rows')) {
+    app.classList.add('help-in');
+    app.appendChild(help.section);
+    // The column is wider: the button may now fit beside the title.
+    layoutHeader();
+    // The biggest type that fits, then without the diagrams.
+    for (const [size, plain] of [[15, false], [14, false], [13, false],
+                                 [15, true], [14, true], [13, true], [12, true]]) {
+      help.section.style.setProperty('--help-size', size + 'px');
+      help.section.classList.toggle('plain', plain);
+      if (help.section.scrollHeight <= help.section.clientHeight + 1) {
+        showBack(false);
+        return;
+      }
+    }
+    help.section.classList.remove('plain');
+    app.classList.remove('help-in');
+    help.inner.appendChild(help.section);
+    layoutHeader();
+  }
+}
+
+// ---------- layout ----------
+// Three layouts: stacked (the title, the controls, then the module), wide
+// (the module over the full height, beside a column with the title and the
+// controls) and wide in rows (the same, for short screens). The page takes
+// the one where the module is biggest and the controls fit: no sizes of
+// devices, only the space there is.
+const SIDE_MIN = 280;    // the narrowest column for the controls beside the module
+function layoutPage() {
+  const { app, top } = header;
+  // Not while the page has no size of its own yet (loaded hidden).
+  if (app.clientWidth < 100 || app.clientHeight < 100) return;
+  laidOut = true;
+  // Measured without the help, which goes where it fits once the layout is
+  // chosen.
+  app.classList.remove('help-in');
+  help.inner.appendChild(help.section);
+  const controls = document.querySelector('.controls');
+  const middle = document.querySelector('.middle');
+  const set = classes => {
+    app.classList.remove('wide', 'rows');
+    app.classList.add(...classes);
+    top.style.marginLeft = top.style.marginRight = '';
+    top.style.setProperty('--fit', 1);
+    header.download.classList.remove('short');
+  };
+  // How wide the module is in a layout, or 0 if the controls do not fit in
+  // it (too tall for the page, or wider than their column).
+  const measure = classes => {
+    set(classes);
+    const cs = getComputedStyle(app), a = app.getBoundingClientRect();
+    const bottom = a.bottom - parseFloat(cs.paddingBottom);
+    const side = top.getBoundingClientRect().width;
+    const fits = controls.getBoundingClientRect().bottom <= bottom + 0.5 &&
+        app.scrollWidth <= app.clientWidth + 1 && middle.getBoundingClientRect().right <= a.right + 0.5 &&
+        (!classes.length || side >= SIDE_MIN);
+    const [left, right] = moduleEdges();
+    return fits ? right - left : 0;
+  };
+  // The module beside the controls: in their column if they fit there, in
+  // rows if the page is too short for that.
+  let wide = ['wide'], wideSize = measure(wide);
+  if (!wideSize) { wide = ['wide', 'rows']; wideSize = measure(wide); }
+  const stackedSize = measure([]);
+  // A little in favour of the module beside the controls, which keeps it whole.
+  set(wideSize && wideSize * 1.04 >= stackedSize ? wide : []);
+  layoutHeader();
+  placeHelp();
+}
+let layoutTimer = null, laidOut = false;
+// The first time the page has a size, at once (before it is painted), then
+// once a resize settles.
+const relayout = () => {
+  clearTimeout(layoutTimer);
+  if (laidOut) layoutTimer = setTimeout(layoutPage, 60);
+  else layoutPage();
+};
+window.addEventListener('resize', relayout);
+// Also when the page gets its size some other way (an iframe shown).
+if (window.ResizeObserver) new ResizeObserver(relayout).observe(document.documentElement);
+layoutPage();
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => {
+    for (const side of ['left', 'right']) ui.names[side].forEach(n => fitName(n.t));
+    layoutPage();
+  });
+}
+render();
+power().catch(() => {});
+</script>

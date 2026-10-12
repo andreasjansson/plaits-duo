@@ -1,0 +1,58 @@
+# Builds the web demo (web/web.mk: the firmware compiled to WebAssembly, and
+# the firmware update file it offers) and publishes it on GitHub Pages, at
+# every push to main.
+
+name: Web demo
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the tools
+        run: |
+          pip install numpy
+          mkdir -p "$HOME/tools"
+          cd "$HOME/tools"
+          curl -sSfL https://developer.arm.com/-/media/Files/downloads/gnu/13.3.rel1/binrel/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz | tar -xJ
+          curl -sSfL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-34/wasi-sdk-34.0-x86_64-linux.tar.gz | tar -xz
+          curl -sSfL https://github.com/WebAssembly/binaryen/releases/download/version_133/binaryen-version_133-x86_64-linux.tar.gz | tar -xz
+
+      - name: Build the firmware update file
+        run: make -f plaits/makefile TOOLCHAIN_PATH="$HOME/tools/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/" PYTHON=python wav
+
+      - name: Build the web demo
+        run: make -f web/web.mk WASI_SDK_PATH="$HOME/tools/wasi-sdk-34.0-x86_64-linux" BINARYEN_PATH="$HOME/tools/binaryen-version_133" PYTHON=python
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
