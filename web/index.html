@@ -62,6 +62,8 @@ button:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 .play .stop-icon, .play[aria-pressed="true"] .play-icon { display: none; }
 .play[aria-pressed="true"] .stop-icon { display: block; }
 .play[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+.loop-pick { display: inline-flex; align-items: center; gap: 6px; }
+.pick-label { font: 600 13px/1.2 var(--font-body); color: var(--ink); white-space: nowrap; }
 .patterns { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 2px; }
 .patterns .chip { font: 700 14px/1.2 var(--font-display); letter-spacing: 0.02em; min-width: 1.85em; padding: 2px 5px; text-align: center; }
 .voices { display: inline-flex; border: 2px solid var(--ink); border-radius: 999px; overflow: hidden; }
@@ -263,7 +265,10 @@ img { max-width: 100%; }
       </button>
     </div>
     <div class="row">
-      <div class="patterns" role="group" aria-label="Loop" id="patterns"></div>
+      <div class="loop-pick">
+        <span class="pick-label" aria-hidden="true">Loop:</span>
+        <div class="patterns" role="group" aria-label="Loop" id="patterns"></div>
+      </div>
       <div class="voices" role="group" aria-label="Voices">
         <button type="button" id="mono" aria-pressed="true">Monophonic</button>
         <button type="button" id="duophonic" aria-pressed="false">Duophonic</button>
@@ -438,8 +443,8 @@ const NAMES = {
 // The loops of the sequencer (see loops.js), numbered on the page. In duo
 // mode, the second voice plays each loop's countermelody.
 const PAGE_LOOPS = ['rings-live', 'ebm-bass', 'rings-synco', 'string-machine', 'vowel-duet',
-                    'wavetable-seq', 'industrial', 'chant', 'random-walk', 'accents'];
-const NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+                    'wavetable-seq', 'industrial'];
+const NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 const ALL_LOOPS = [...PLAITS_LOOPS.current, ...PLAITS_LOOPS.candidates];
 const PATTERNS = PAGE_LOOPS.map((id, i) => ({ id, name: NUMERALS[i], loop: ALL_LOOPS.find(l => l.id === id) }));
 
