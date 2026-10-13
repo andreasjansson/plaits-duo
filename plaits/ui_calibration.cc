@@ -34,7 +34,14 @@
 // for the tolerances of their resistors. The calibration needs no voltage
 // source: holding the two buttons in duo mode, the module outputs two
 // voltages in turn on OUT and AUX, which are patched into V/OCT (calibrated
-// at the factory), then into LEVEL.
+// at the factory), then into LEVEL. Each step waits for its input to read
+// the two voltages, settled (the LED flashes green), and LEVEL must read the
+// same voltages as V/OCT: whatever the calibration of V/OCT, LEVEL then reads
+// the same pitches.
+//
+// The calibration of V/OCT (in the original firmware's mode) only accepts
+// voltages about 2V apart (the original firmware accepted 1 to 3V), and
+// keeps the offsets of the inputs which are patched.
 
 #include "plaits/ui.h"
 
@@ -62,6 +69,27 @@ static const int16_t kCalibrationSamples[2] = { -2000, -18000 };
 static const int kCalibrationPeriod = 64;
 static const int kCalibrationSettling = 16;
 
+// An input reads the two voltages when the difference between its readings
+// is that of 2.5 to 5.3V (about 3.9V: 0.8), and they have settled when the
+// difference has moved by less than 0.0002 (1.2 cents for the whole
+// interval) in each of the last 64 periods (1s, so that the LED's change
+// from a pulse to a flash is seen): about 1.2s after the cable is patched.
+static const float kCalibrationMinInterval = 0.5f;
+static const float kCalibrationMaxInterval = 1.07f;
+static const float kCalibrationStableChange = 0.0002f;
+static const int kCalibrationStablePeriods = 64;
+
+// LEVEL reads the same voltages as V/OCT: the same difference, within the
+// tolerances of the two input stages.
+static const float kCalibrationMinRatio = 0.85f;
+static const float kCalibrationMaxRatio = 1.18f;
+
+// The calibration of V/OCT: 1V, then 3V, which V/OCT reads 0.41 apart
+// (-0.2 per volt, and the converter's gain error, 2.4 to 3.1% too high),
+// within 10%.
+static const float kVOctMinDelta = -0.46f;
+static const float kVOctMaxDelta = -0.37f;
+
 void Ui::UpdateLevelNoteScale() {
   // Semitones per unit of (calibrated) LEVEL CV, until LEVEL is calibrated:
   // as many per unit of reading as V/OCT.
@@ -72,10 +100,20 @@ void Ui::UpdateLevelNoteScale() {
 void Ui::StartCalibration(bool level) {
   mode_ = UI_MODE_CALIBRATION_C1;
   calibrating_level_ = level;
+  // (The detection does not work without the probe.)
+  calibration_patched_ = 0;
+  const bool* patched = &modulations_->frequency_patched;
+  for (int i = 0; i < kNumNormalizedChannels; ++i) {
+    calibration_patched_ |= patched[i] << i;
+  }
   normalization_probe_.Disable();
   if (level) {
     calibration_phase_ = 0;
     calibration_output_ = kCalibrationSamples[0];
+    for (int i = 0; i < 2; ++i) {
+      calibration_interval_[i] = 0.0f;
+      calibration_stable_[i] = 0;
+    }
   }
 }
 
@@ -86,14 +124,37 @@ void Ui::TrackCalibrationOutput() {
     ONE_POLE(
         calibration_reading_[voltage][0],
         cv_adc_.float_value(CV_ADC_CHANNEL_V_OCT),
-        0.02f);
+        0.05f);
     ONE_POLE(
         calibration_reading_[voltage][1],
         cv_adc_.float_value(CV_ADC_CHANNEL_LEVEL),
-        0.02f);
+        0.05f);
   }
   calibration_phase_ = (calibration_phase_ + 1) % kCalibrationPeriod;
   calibration_output_ = kCalibrationSamples[calibration_phase_ / half];
+  if (calibration_phase_ == 0) {
+    // A period has ended: have the readings settled?
+    for (int i = 0; i < 2; ++i) {
+      const float interval = \
+          calibration_reading_[1][i] - calibration_reading_[0][i];
+      if (fabsf(interval - calibration_interval_[i]) < \
+          kCalibrationStableChange) {
+        if (calibration_stable_[i] < kCalibrationStablePeriods) {
+          ++calibration_stable_[i];
+        }
+      } else {
+        calibration_stable_[i] = 0;
+      }
+      calibration_interval_[i] = interval;
+    }
+  }
+}
+
+bool Ui::CalibrationReady(int input) const {
+  const float interval = fabsf(calibration_interval_[input]);
+  return calibration_stable_[input] >= kCalibrationStablePeriods && \
+      interval > kCalibrationMinInterval && \
+      interval < kCalibrationMaxInterval;
 }
 
 void Ui::EndLevelCalibration(UiMode mode) {
@@ -104,30 +165,35 @@ void Ui::EndLevelCalibration(UiMode mode) {
 
 void Ui::CalibrateC1() {
   if (calibrating_level_) {
-    // OUT or AUX is patched into V/OCT: the notes of the two voltages.
+    // OUT or AUX is patched into V/OCT, which reads the two voltages,
+    // settled: the notes of the two voltages.
+    if (!CalibrationReady(0)) {
+      EndLevelCalibration(UI_MODE_ERROR);
+      return;
+    }
     const ChannelCalibrationData& c = settings_->calibration_data(
         CV_ADC_CHANNEL_V_OCT);
     for (int i = 0; i < 2; ++i) {
       calibration_note_[i] = c.Transform(calibration_reading_[i][0]);
     }
-    // Nominally 47 semitones apart.
-    const float interval = calibration_note_[1] - calibration_note_[0];
-    if (interval > 30.0f && interval < 64.0f) {
-      mode_ = UI_MODE_CALIBRATION_C3;
-      // Into LEVEL too (with a stackable cable or a mult): done.
-      if (fabsf(calibration_reading_[1][1] - calibration_reading_[0][1]) > \
-          0.4f) {
-        CalibrateC3();
-      }
-    } else {
-      EndLevelCalibration(UI_MODE_ERROR);
+    calibration_v_oct_interval_ = calibration_interval_[0];
+    mode_ = UI_MODE_CALIBRATION_C3;
+    // Into LEVEL too (with a stackable cable or a mult): done.
+    if (CalibrationReady(1)) {
+      CalibrateC3();
     }
     return;
   }
 
-  // Acquire offsets for all channels.
+  // Acquire offsets for all channels, except those which are patched (only
+  // V/OCT should be).
   for (int i = 0; i < CV_ADC_CHANNEL_LAST; ++i) {
-    if (i != CV_ADC_CHANNEL_V_OCT) {
+    bool patched = false;
+    for (int j = 0; j < kNumNormalizedChannels; ++j) {
+      patched = patched || (normalized_channels_[j] == i && \
+          ((calibration_patched_ >> j) & 1));
+    }
+    if (i != CV_ADC_CHANNEL_V_OCT && !patched) {
       ChannelCalibrationData* c = settings_->mutable_calibration_data(i);
       c->offset = -cv_adc_.float_value(CvAdcChannel(i)) * c->scale;
     }
@@ -138,11 +204,14 @@ void Ui::CalibrateC1() {
 
 void Ui::CalibrateC3() {
   if (calibrating_level_) {
-    // The same output is now patched into LEVEL, which nominally reads -60
-    // semitones per unit.
-    const float scale = (calibration_note_[1] - calibration_note_[0]) / \
-        (calibration_reading_[1][1] - calibration_reading_[0][1]);
-    if (scale > -72.0f && scale < -48.0f) {
+    // The same output is now patched into LEVEL, which reads the two
+    // voltages, settled, as V/OCT did.
+    const float level_interval = calibration_interval_[1];
+    const float ratio = level_interval / calibration_v_oct_interval_;
+    if (CalibrationReady(1) && ratio > kCalibrationMinRatio && \
+        ratio < kCalibrationMaxRatio) {
+      const float scale = \
+          (calibration_note_[1] - calibration_note_[0]) / level_interval;
       PersistentData* p = settings_->mutable_persistent_data();
       p->level_note_scale = scale;
       p->level_note_offset = calibration_note_[0] - \
@@ -162,7 +231,7 @@ void Ui::CalibrateC3() {
   float c3 = pitch_lp_calibration_;
   float delta = c3 - c1;
 
-  if (delta > -0.6f && delta < -0.2f) {
+  if (delta > kVOctMinDelta && delta < kVOctMaxDelta) {
     ChannelCalibrationData* c = settings_->mutable_calibration_data(
         CV_ADC_CHANNEL_V_OCT);
     c->scale = 24.0f / delta;

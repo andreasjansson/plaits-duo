@@ -90,6 +90,7 @@ class Ui {
   void CalibrateC1();
   void CalibrateC3();
   void TrackCalibrationOutput();
+  bool CalibrationReady(int input) const;
   void EndLevelCalibration(UiMode mode);
   void UpdateLevelNoteScale();
 
@@ -132,6 +133,16 @@ class Ui {
   int16_t calibration_output_;
   float calibration_reading_[2][2];
   float calibration_note_[2];
+  // For each input (V/OCT, LEVEL): the difference between its readings of
+  // the two voltages at the end of the previous period, and for how many
+  // periods it has stayed the same (the readings have settled). And V/OCT's
+  // difference when the first voltage was taken.
+  float calibration_interval_[2];
+  int calibration_stable_[2];
+  float calibration_v_oct_interval_;
+  // The inputs detected as patched when the calibration started (bit i:
+  // normalized_channels_[i]): the calibration of V/OCT keeps their offsets.
+  uint8_t calibration_patched_;
   
   // LED animation played when entering or leaving duo mode.
   int duo_animation_;

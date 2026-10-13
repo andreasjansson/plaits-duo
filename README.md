@@ -45,17 +45,24 @@ firmware update file.
 - **Calibration of LEVEL** (recommended): in duo
   mode, hold the two buttons for 2 seconds. The bottom LED pulses green, and
   OUT and AUX carry two voltages in turn, about 0.5V and 4.4V, 15 times a
-  second (a loud buzz: turn the mixer down). Patch OUT into V/OCT, wait a
-  second, and press the left button: the LED turns yellow. Move the cable
-  from V/OCT to LEVEL, wait a second, and press the left button again: the
-  LEDs show the model again, and the calibration is saved. Each press uses
-  the readings averaged over the moment before it, hence the second of
-  waiting. With a stackable cable or a mult into both V/OCT and LEVEL, the
-  first press is enough. LEVEL then reads exactly what V/OCT reads, so that
-  the two voices stay in tune with each other across octaves. With the cable
-  in the wrong place, a press is rejected (all the LEDs light up red until a
-  button is pressed), and the previous calibration is kept. In the original
-  firmware, the two buttons still calibrate V/OCT.
+  second (a loud buzz: turn the mixer down). Patch OUT into V/OCT. When the
+  bottom LED **flashes green** (about a second later: V/OCT has read the two
+  voltages, and its readings have settled), press the left button: the LED
+  pulses yellow. Move the cable from V/OCT to LEVEL, and when the LED
+  flashes green again, press the left button: the LEDs show the model
+  again, and the calibration is saved. With a stackable cable or a mult into
+  both V/OCT and LEVEL, the first press is enough. LEVEL then reads exactly
+  what V/OCT reads, whatever the calibration of V/OCT, so that the two
+  voices stay in tune with each other across octaves. A press before the
+  green flash, or with LEVEL not reading the same voltages as V/OCT (the
+  cable in the wrong place), is rejected: all the LEDs light up red until a
+  button is pressed, and the previous calibration is kept.
+- **In the original firmware**, the two buttons still calibrate V/OCT, with
+  1V and then 3V. Only V/OCT should be patched: the inputs detected as
+  patched keep the offsets they had (the original firmware measured them
+  again from whatever was patched), and voltages which are not about 2V
+  apart are rejected (the original firmware accepted 1 to 3V apart, which
+  saved a wrong calibration when the voltage was not the one expected).
 
 The models (green 1 to 6 and 8 of the original firmware, with the
 inharmonic string in place of the chords), and how each one makes its

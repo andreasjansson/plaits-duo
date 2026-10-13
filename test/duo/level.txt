@@ -89,13 +89,13 @@ release both
 echo waiting for V/OCT:
 leds 500ms
 patch v_oct main
-wait 500ms
+wait 1.5s
 tap left
 echo waiting for LEVEL:
 leds 500ms
 unpatch v_oct
 patch level main
-wait 500ms
+wait 1.5s
 tap left
 echo done:
 leds
@@ -144,7 +144,7 @@ wait 2.1s
 release both
 patch v_oct main
 patch level main
-wait 500ms
+wait 1.5s
 tap left
 leds
 state
@@ -168,11 +168,11 @@ press both
 wait 2.1s
 release both
 patch v_oct main
-wait 500ms
+wait 1.5s
 tap left
 unpatch v_oct
 patch level main
-wait 500ms
+wait 1.5s
 tap left
 unpatch level
 reboot
@@ -201,7 +201,7 @@ wait 2.1s
 release both
 patch v_oct main
 patch level main
-wait 500ms
+wait 1.5s
 tap left
 unpatch v_oct
 unpatch level
@@ -218,7 +218,7 @@ patch v_oct main
 press both
 wait 2.1s
 release both
-wait 500ms
+wait 1.5s
 tap left
 leds 500ms
 unpatch v_oct
@@ -252,7 +252,7 @@ wait 2.1s
 release both
 patch v_oct main
 patch level main
-wait 500ms
+wait 1.5s
 tap left
 unpatch level
 wait 500ms
@@ -281,3 +281,173 @@ engine 0
 duo_engine 0
 level calibration scale -58.252 offset 47.568
 color_blind 0
+
+===
+while LEVEL is calibrated, LED 7 pulses until the input of the step (V/OCT, then LEVEL) reads the two voltages, settled for a second, then flashes green, four times a second: the left button can be pressed
+===
+plaits-sim <<'SCRIPT' | awk '/^(waiting|ready)/ { section = $0; next } /ms/ { changes[section]++ } END { for (s in changes) print s, (changes[s] > 30 ? "pulses" : changes[s] >= 6 && changes[s] <= 10 ? "flashes" : changes[s] " changes") }' | sort
+wait 500ms
+tap both
+wait 300ms
+gain_error level 1.03
+press both
+wait 2.1s
+release both
+echo waiting for V/OCT:
+trace 7 1s
+patch v_oct main
+wait 1.5s
+echo ready, V/OCT:
+trace 7 1s
+tap left
+unpatch v_oct
+echo waiting for LEVEL:
+trace 7 1s
+patch level main
+wait 1.5s
+echo ready, LEVEL:
+trace 7 1s
+SCRIPT
+---
+ready, LEVEL: flashes
+ready, V/OCT: flashes
+waiting for LEVEL: pulses
+waiting for V/OCT: pulses
+
+===
+a press before LED 7 flashes green is rejected (all LEDs red), and the previous calibration is kept
+===
+plaits-sim <<'SCRIPT' | grep -v saved
+wait 500ms
+tap both
+wait 300ms
+gain_error level 1.03
+press both
+wait 2.1s
+release both
+patch v_oct main
+patch level main
+wait 1.5s
+tap left
+unpatch v_oct
+unpatch level
+wait 500ms
+press both
+wait 2.1s
+release both
+patch v_oct main
+wait 300ms
+tap left
+leds 500ms
+state
+SCRIPT
+---
+leds RRRRRRRR
+duo_mode 1
+engine 0
+duo_engine 0
+level calibration scale -58.252 offset 47.568
+color_blind 0
+
+===
+in the original firmware, a calibration of V/OCT is rejected (all LEDs red) unless its two voltages are about 2V apart (1V and 2.6V here), and the previous calibration is kept
+===
+cat > calibrate.txt <<'SCRIPT'
+press both
+wait 2.1s
+release both
+cv v_oct 1
+wait 300ms
+tap left
+cv v_oct 2.6
+wait 300ms
+tap left
+wait 100ms
+tap left
+SCRIPT
+{ echo "wait 500ms"; head -9 calibrate.txt; echo leds; } | plaits-sim
+echo "1V: $(./main_note plaits-sim calibrate.txt 1)"
+echo "3V: $(./main_note plaits-sim calibrate.txt 3)"
+---
+leds RRRRRRRR
+1V: {{ n1 }}
+3V: {{ n3 }}
+---
+where
+* abs(n3 - n1 - 24) < 0.05
+
+===
+in the original firmware, the calibration of V/OCT keeps the offsets of the inputs which are patched (LEVEL, with 2V in it): in duo mode, LEVEL then still reads 0V as the pitch of the first voice
+===
+cat > calibrate.txt <<'SCRIPT'
+cv level 2
+wait 500ms
+press both
+wait 2.1s
+release both
+cv v_oct 1
+wait 300ms
+tap left
+cv v_oct 3
+wait 300ms
+tap left
+unpatch level
+cv v_oct 0
+tap both
+wait 300ms
+tap right
+SCRIPT
+printf 'tap both\nwait 300ms\n' > duo.txt
+echo "voice 2, LEVEL at 0V: $(./aux_note calibrate.txt 0)"
+echo "voice 1, V/OCT at 0V: $(./main_note plaits-sim duo.txt 0)"
+---
+voice 2, LEVEL at 0V: {{ n2 }}
+voice 1, V/OCT at 0V: {{ n1 }}
+---
+where
+* abs(n2 - n1) < 0.3
+
+===
+with V/OCT calibrated with voltages 2.2V apart instead of 2V (its octaves 10% too narrow), the calibration of LEVEL still succeeds, and LEVEL reads the same pitches as V/OCT
+===
+cat > calibrate.txt <<'SCRIPT'
+press both
+wait 2.1s
+release both
+cv v_oct 1
+wait 300ms
+tap left
+cv v_oct 3.2
+wait 300ms
+tap left
+tap both
+wait 300ms
+press both
+wait 2.1s
+release both
+patch v_oct main
+wait 1.5s
+tap left
+unpatch v_oct
+patch level main
+wait 1.5s
+tap left
+unpatch level
+tap right
+SCRIPT
+echo "voice 2, LEVEL at 1V: $(./aux_note calibrate.txt 1)"
+echo "voice 2, LEVEL at 3V: $(./aux_note calibrate.txt 3)"
+cat calibrate.txt > v_oct.txt
+printf 'tap right\n' >> v_oct.txt
+echo "voice 1, V/OCT at 1V: $(./main_note plaits-sim v_oct.txt 1)"
+echo "voice 1, V/OCT at 3V: $(./main_note plaits-sim v_oct.txt 3)"
+---
+voice 2, LEVEL at 1V: {{ a1 }}
+voice 2, LEVEL at 3V: {{ a3 }}
+voice 1, V/OCT at 1V: {{ m1 }}
+voice 1, V/OCT at 3V: {{ m3 }}
+---
+where
+* abs((a3 - a1) - (m3 - m1)) < 0.1
+* abs(a1 - m1) < 0.2
+* abs((m3 - m1) - 24 / 1.1) < 0.3

@@ -54,7 +54,7 @@ wait 2.1s
 release both
 patch v_oct main
 patch level main
-wait 500ms
+wait 1.5s
 tap left
 unpatch v_oct
 unpatch level

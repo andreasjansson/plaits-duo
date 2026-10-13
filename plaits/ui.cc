@@ -236,14 +236,21 @@ void Ui::UpdateLEDs() {
       break;
       
     case UI_MODE_CALIBRATION_C1:
-      if (pwm_counter < triangle) {
-        leds_.set(calibrating_level_ ? 7 : 0, LED_COLOR_GREEN);
-      }
-      break;
-
     case UI_MODE_CALIBRATION_C3:
-      if (pwm_counter < triangle) {
-        leds_.set(calibrating_level_ ? 7 : 0, LED_COLOR_YELLOW);
+      {
+        // Calibrating LEVEL: a quick green flash when the input of the step
+        // reads the two voltages, settled (the button can be pressed).
+        // Otherwise a slow pulse, green for V/OCT, yellow for LEVEL.
+        const int step = mode_ == UI_MODE_CALIBRATION_C1 ? 0 : 1;
+        if (calibrating_level_ && CalibrationReady(step)) {
+          if ((pwm_counter_ >> 7) & 1) {
+            leds_.set(7, LED_COLOR_GREEN);
+          }
+        } else if (pwm_counter < triangle) {
+          leds_.set(
+              calibrating_level_ ? 7 : 0,
+              step == 0 ? LED_COLOR_GREEN : LED_COLOR_YELLOW);
+        }
       }
       break;
     
