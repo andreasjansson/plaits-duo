@@ -64,6 +64,8 @@ firmware update file.
   apart are rejected (the original firmware accepted 1 to 3V apart, which
   saved a wrong calibration when the voltage was not the one expected).
 
+### Models
+
 The models (green 1 to 6 and 8 of the original firmware, with the
 inharmonic string in place of the chords), and how each one makes its
 stereo image:
